@@ -962,7 +962,7 @@ async function loadFromUrl() {
 
 // ─── DEMO LOADER ─────────────────────────────────────────
 function loadDemo(){
-  if(!window.SETTLEUP_DEMO){alert('No demo file found.\nMake sure settleup-demo.js is in the same folder.');return;}
+  if(!window.SETTLEUP_DEMO){alert('No demo file found.\nMake sure settlingup-demo.js is in the same folder.');return;}
   const d=window.SETTLEUP_DEMO;
   state={tabName:'',people:[],expenses:[],currentSplitType:'even'};
   state.tabName=d.tabName;
@@ -979,6 +979,6 @@ window.addEventListener('load', async ()=>{
 });
 </script>
 
-<script src="settleup-demo.js" onerror="console.log('No demo file — thats fine.')"></script>
+<script src="settlingup-demo.js" onerror="console.log('No demo file — thats fine.')"></script>
 </body>
 </html>
