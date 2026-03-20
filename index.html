@@ -1223,14 +1223,20 @@ async function loadTabFromSupabase(code) {
     personIdSeq = tab.person_id_seq;
     expenseIdSeq = state.expenses.length ? Math.max(...state.expenses.map(e=>e.id))+1 : 0;
 
-    // Restore saved identity so goSettle renders correctly on first load
     const savedId = localStorage.getItem('su-identity-'+tab.id);
     if(savedId !== null) { state.myPersonId = parseInt(savedId); updateIdentityChip(); }
 
     document.getElementById('tab-name').value = state.tabName;
     renderPeopleList();
     renderExpenseStep();
-    await goSettle();
+
+    // UPDATE: Check URL hash to decide where to land
+    if (window.location.hash === '#expenses') {
+      goStep(2); // Stop at Expenses page
+    } else {
+      await goSettle(); // Default to Settle page (step 3)
+    }
+
     subscribeToTab(tab.id);
     hideDbOverlay();
   } catch(err) {
@@ -1253,13 +1259,19 @@ function subscribeToTab(tabId) {
         if(state.expenses.find(e=>e.id===exp.id)) return; // our own optimistic insert
         state.expenses.push(exp);
         expenseIdSeq = Math.max(expenseIdSeq, exp.id+1);
+        
+        // UPDATE: Re-render whichever step is currently active
         if(document.getElementById('step-2').classList.contains('active')) renderExpenseList();
+        if(document.getElementById('step-3').classList.contains('active')) goSettle();
       })
     .on('postgres_changes',
       {event:'DELETE', schema:'public', table:'expenses', filter:'tab_id=eq.'+tabId},
       payload => {
         state.expenses = state.expenses.filter(e=>e.id!==payload.old.id);
+        
+        // UPDATE: Re-render whichever step is currently active
         if(document.getElementById('step-2').classList.contains('active')) renderExpenseList();
+        if(document.getElementById('step-3').classList.contains('active')) goSettle();
       })
     .on('postgres_changes',
       {event:'UPDATE', schema:'public', table:'tabs', filter:'id=eq.'+tabId},
@@ -1343,13 +1355,18 @@ function hideDbOverlay() {
 
 // ─── SHAREABLE URL ───────────────────────────────────────
 async function shareTab(btn) {
-  // Capture tab name if called from step 1 or 2 (before goSettle sets it)
+  // Capture tab name if called from step 1 or 2
   const nameEl = document.getElementById('tab-name');
   if(nameEl && nameEl.value.trim()) state.tabName = nameEl.value.trim();
 
+  // UPDATE: Determine which page we are sharing from
+  let hashSuffix = '';
+  if(document.getElementById('step-2').classList.contains('active')) hashSuffix = '#expenses';
+  else if(document.getElementById('step-3').classList.contains('active')) hashSuffix = '#settle';
+
   // If the tab is saved in Supabase, share the short URL
   if(state.shortCode) {
-    const url = window.location.origin + '/t/' + state.shortCode;
+    const url = window.location.origin + '/t/' + state.shortCode + hashSuffix;
     try { await navigator.clipboard.writeText(url); showCopied(btn); }
     catch(e) { fallbackCopy(url); showCopied(btn); }
     return;
@@ -1361,7 +1378,7 @@ async function shareTab(btn) {
     if(btn){ btn.textContent='Saving…'; btn.disabled=true; }
     try {
       await createTab();
-      const url = window.location.origin + '/t/' + state.shortCode;
+      const url = window.location.origin + '/t/' + state.shortCode + hashSuffix;
       try { await navigator.clipboard.writeText(url); } catch(e) { fallbackCopy(url); }
       showCopied(btn);
     } catch(err) {
@@ -1372,32 +1389,21 @@ async function shareTab(btn) {
     return;
   }
 
-  // Otherwise fall back to compressed hash URL
+  // Fallback hash logic remains untouched...
   try {
     const payload = {
-      t: state.tabName,
-      p: state.people.map(p=>({i:p.id,n:p.name})),
-      e: state.expenses.map(e=>({
-        i:e.id,d:e.desc,a:e.amount,
-        b:e.paidBy,s:e.splitType,
-        w:e.splitWith,m:e.splitAmounts
-      })),
+      t: state.tabName, p: state.people.map(p=>({i:p.id,n:p.name})),
+      e: state.expenses.map(e=>({ i:e.id,d:e.desc,a:e.amount, b:e.paidBy,s:e.splitType, w:e.splitWith,m:e.splitAmounts })),
       ps:personIdSeq, es:expenseIdSeq
     };
-
     const json = JSON.stringify(payload);
     const encoded = await compress(json);
     const url = window.location.href.split('#')[0] + '#v2.' + encoded;
 
     if(navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(url).then(()=>showCopied(btn)).catch(()=>{ fallbackCopy(url); showCopied(btn); });
-    } else {
-      fallbackCopy(url); showCopied(btn);
-    }
-  } catch(err) {
-    console.error(err);
-    alert('Could not generate link: ' + err.message);
-  }
+    } else { fallbackCopy(url); showCopied(btn); }
+  } catch(err) { alert('Could not generate link: ' + err.message); }
 }
 
 async function compress(str) {
