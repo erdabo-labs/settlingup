@@ -520,11 +520,23 @@ let _tempIdSeq = -1;
 function nextTempId() { return _tempIdSeq--; }
 
 // ─── NAV ─────────────────────────────────────────────────
-function goStep(n) {
+async function goStep(n) {
   if(n === 1) state.tabName = document.getElementById('tab-name').value.trim() || 'Our Tab';
   if(n === 2) {
     if(state.people.length < 2) { alert('Add at least 2 people first.'); return; }
     renderExpenseStep();
+    // Create the tab in Supabase immediately so the URL is shareable
+    // and realtime sync starts before any expenses are added.
+    if(db && !state.tabId) {
+      try {
+        await createTab();
+        subscribeToTab(state.tabId);
+        // Show shareable URL in address bar immediately — no need to press Share
+        document.getElementById('conn-dot').style.display = '';
+      } catch(err) {
+        console.warn('Could not auto-create tab:', err);
+      }
+    }
   }
   document.querySelectorAll('.step').forEach((el,i) => el.classList.toggle('active', i === n));
   document.querySelectorAll('.step-dot').forEach((el,i) => {
@@ -753,12 +765,11 @@ async function addExpense() {
     clearExpenseForm();
     renderExpenseList();
 
-    if(db) {
+    if(db && state.tabId) {
       _pendingLocalIds.add(tempId);
-      const realId = await saveExpenseToSupabase(newExp, tempId);
+      const realId = await saveExpenseToSupabase(newExp);
       _pendingLocalIds.delete(tempId);
       if(realId !== null) {
-        // Replace temp ID with real DB ID in state
         const i = state.expenses.findIndex(e => e.id === tempId);
         if(i !== -1) { state.expenses[i].id = realId; }
         renderExpenseList();
@@ -1162,20 +1173,6 @@ async function createTab() {
   state.tabId = data.id;
   state.shortCode = shortCode;
 
-  if(state.expenses.length) {
-    // Use INSERT without id field for new rows
-    const rows = state.expenses.map(e => expenseToRow(e, data.id, false));
-    const {data: insertedRows, error: expErr} = await db.from('expenses').insert(rows).select('id');
-    if(expErr) {
-      throw expErr;
-    }
-    // Update local expense IDs with real DB IDs (in order)
-    if(insertedRows) {
-      insertedRows.forEach((row, idx) => {
-        if(state.expenses[idx]) state.expenses[idx].id = row.id;
-      });
-    }
-  }
 
   history.pushState({}, '', '/t/'+shortCode);
 }
@@ -1297,29 +1294,8 @@ function refreshAfterRemoteChange() {
 
 // Returns the saved row (with real DB id) or null on failure
 // Saves a single new expense. Returns the real DB integer id, or null on failure.
-// tempId is the negative local id we used before the DB assigned a real one.
-async function saveExpenseToSupabase(exp, tempId) {
-  if(!db) return null;
-
-  // If tab doesn't exist yet, createTab() will bulk-insert ALL current expenses
-  // (including this one) and update their IDs in state directly. So we just
-  // need to find and return the real id that createTab assigned.
-  if(!state.tabId) {
-    try {
-      await createTab();
-    } catch(err) {
-      showToast('Could not save — check connection.', true);
-      return null;
-    }
-    // createTab already inserted this expense and updated state.expenses[i].id
-    // Find the real id it assigned (it will no longer be the tempId)
-    const exp2 = state.expenses.find(e => e.id !== tempId && e.desc === exp.desc && e.amount === exp.amount);
-    // More reliably: createTab updates in-order, so find by matching desc+amount+paidBy
-    const match = state.expenses.find(e => e.id > 0 && e.desc === exp.desc && e.amount === exp.amount && e.paidBy === exp.paidBy);
-    return match ? match.id : null;
-  }
-
-  // Tab already exists — just insert this one expense
+async function saveExpenseToSupabase(exp) {
+  if(!db || !state.tabId) return null;
   await setOwnerToken();
   const row = expenseToRow(exp, state.tabId, false);
   const {data, error} = await db.from('expenses').insert(row).select('id').single();
@@ -1328,8 +1304,9 @@ async function saveExpenseToSupabase(exp, tempId) {
     showToast('Could not save expense — check connection.', true);
     return null;
   }
-  return data.id; // real DB integer id
+  return data.id;
 }
+
 
 async function updateExpenseInSupabase(exp) {
   if(!db || !state.tabId) return;
