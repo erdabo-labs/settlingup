@@ -56,27 +56,29 @@
   --num: 'JetBrains Mono', monospace;
 }
 
+html, body { width: 100%; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   font-family: 'Outfit', sans-serif;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
   transition: background 0.3s, color 0.3s;
 }
 [data-theme="dark"] body {
   background-image:
-    radial-gradient(ellipse 70% 50% at 15% 0%, var(--glow1) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 60% at 85% 90%, var(--glow2) 0%, transparent 60%);
+    radial-gradient(ellipse 100% 50% at 15% 0%, var(--glow1) 0%, transparent 60%),
+    radial-gradient(ellipse 80% 60% at 85% 90%, var(--glow2) 0%, transparent 60%);
 }
 [data-theme="light"] body {
   background-image:
-    radial-gradient(ellipse 70% 50% at 15% 0%, var(--glow1) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 60% at 85% 90%, var(--glow2) 0%, transparent 60%);
+    radial-gradient(ellipse 100% 50% at 15% 0%, var(--glow1) 0%, transparent 60%),
+    radial-gradient(ellipse 80% 60% at 85% 90%, var(--glow2) 0%, transparent 60%);
 }
 
-.app { max-width: 480px; margin: 0 auto; padding: 0 16px 100px; }
+.app { max-width: 480px; width: 100%; margin: 0 auto; padding: 0 16px 100px; padding-bottom: max(100px, calc(80px + env(safe-area-inset-bottom))); }
 
 .step { display: none; animation: fadeUp 0.3s ease both; }
 .step.active { display: block; }
@@ -85,11 +87,24 @@ body {
 /* HEADER */
 .header {
   display: flex; align-items: center; gap: 10px;
-  padding: 20px 0 18px;
+  padding: max(20px, calc(16px + env(safe-area-inset-top))) 0 18px;
   position: sticky; top: 0; z-index: 100;
+  /* Bleed to screen edges on mobile, ignoring .app padding */
+  margin-left: -16px;
+  margin-right: -16px;
+  padding-left: 16px;
+  padding-right: 16px;
 }
-[data-theme="dark"] .header { background: linear-gradient(to bottom, var(--bg) 75%, transparent); }
-[data-theme="light"] .header { background: linear-gradient(to bottom, var(--bg) 75%, transparent); }
+[data-theme="dark"] .header {
+  background: linear-gradient(to bottom, var(--bg) 80%, transparent);
+}
+[data-theme="light"] .header {
+  background: linear-gradient(to bottom, var(--bg) 80%, transparent);
+}
+/* On very wide screens the bleed stops at the app container */
+@media (min-width: 520px) {
+  .header { margin-left: 0; margin-right: 0; }
+}
 
 .logo-mark {
   width: 36px; height: 36px; background: var(--accent);
@@ -105,7 +120,14 @@ body {
 .theme-toggle:hover { border-color:var(--border2);background:var(--surfaceHov); }
 
 /* STEP DOTS */
-.step-indicator { display:flex;gap:5px;margin-bottom:24px; }
+.step-indicator {
+  display:flex; gap:5px; margin-bottom:24px;
+  margin-left: -16px; margin-right: -16px;
+  padding-left: 16px; padding-right: 16px;
+}
+@media (min-width: 520px) {
+  .step-indicator { margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0; }
+}
 .step-dot { height:3px;border-radius:2px;background:var(--border);transition:all 0.3s;flex:1; }
 .step-dot.done, .step-dot.active { background:var(--accent); }
 .step-dot.active { opacity:0.55; }
