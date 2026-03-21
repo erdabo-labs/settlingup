@@ -18,53 +18,7 @@
 
 ## 🔴 P1 — Do These First
 
-These are bugs or correctness issues affecting real users right now.
-
-### [ ] Penny rounding — whole-cent splits everywhere
-**Size:** M (half day)
-**Why:** The current math can produce per-person amounts that don't sum exactly to the
-total. This is a trust issue — if the numbers don't add up to the cent, users notice.
-**What to do:**
-- Add a `splitEvenly(total, n)` helper that works in integer cents and distributes
-  remainder pennies to the first N people (largest-remainder method)
-- Replace all `Math.round(x * 100) / 100` split calculations with this helper
-- For custom splits with tax/tip: after proportional distribution, find the 1-cent
-  discrepancy (if any) and add it to the person with the largest fractional remainder
-- In `simplifyDebts()` and `computeDirectPayments()`: normalise all balances to nearest
-  cent before processing; round each payment amount before pushing
-- Guard against negative amounts in `addExpense()`: reject if amount <= 0
-
-### [ ] markDone() uses list index, not stable payment identity
-**Size:** S (1-2 hours)
-**Why:** When user toggles Smart ↔ Direct payment mode, the list re-renders and marks
-shift to wrong payments. This is a data integrity bug.
-**What to do:**
-- Replace `markDone(i)` index with `markDone('from-to')` key (e.g. `'2-0'`)
-- Change done-chip id to `done-${pay.from}-${pay.to}`
-- Maintain a `_markedKeys = new Set()` that survives re-renders
-- On render, restore `.marked` class from the set
-
-### [ ] editExpense() leaves top amount field blank
-**Size:** S (30 mins)
-**Why:** When editing any existing expense, the top amount input shows blank. Confusing.
-**What to do:**
-- At end of `editExpense(id)`, after `setSplitType()`:
-  `document.getElementById('exp-amount-top').value = exp.amount.toFixed(2)`
-- Also fix `cancelEdit()` to clear the top amount field
-
-### [ ] goHome() silently destroys unsaved local-mode data
-**Size:** S (30 mins)
-**Why:** Clicking the logo when in local mode (no Supabase tab saved yet) loses all work.
-**What to do:**
-- In `goHome()`: if not on step 0 AND `state.people.length > 0` AND `!state.tabId`,
-  show a confirm dialog before navigating
-
-### [ ] Realtime INSERT race: _pendingLocalIds never checked
-**Size:** S (30 mins)
-**Why:** Can produce brief duplicate expense cards when saving on a slow connection.
-**What to do:**
-- In the INSERT realtime handler: add `if (_pendingLocalIds.size > 0) return;` before
-  the existing duplicate-ID check
+All P1 items are complete. ✅
 
 ---
 
@@ -79,32 +33,6 @@ shift to wrong payments. This is a data integrity bug.
 - Replace all `alert()` in `addExpense()` with `showFormError('message')`
 - Flash red border on the specific missing field
 - Auto-clear after 4 seconds or on next interaction
-
-### [ ] Keyboard Enter submits expense form
-**Size:** S
-**Why:** Desktop users fill the form with keyboard and must mouse-click to submit.
-**What to do:**
-- Add `onkeydown="if(event.key==='Enter') addExpense()"` to:
-  `#exp-desc`, `#exp-amount-top`, `#exp-amount-personal`, `#exp-tax`, `#exp-tip`
-
-### [ ] "You" card accent border + badge on settle page
-**Size:** S
-**Why:** Your card is first in the list but looks identical to everyone else's. The most
-important card should be visually distinct.
-**What to do:**
-- `.person-card.you-card { border-color: var(--accent); }`
-- Add `<span class="you-badge">You</span>` next to name in card header
-- `.you-badge { font-size:10px; background:var(--accent-bg); color:var(--accent);
-  padding:2px 7px; border-radius:99px; font-weight:700; margin-left:6px;
-  text-transform:uppercase; letter-spacing:0.5px; }`
-
-### [ ] "New tab" button danger styling
-**Size:** XS
-**Why:** Sits next to "← Edit expenses" with identical styling. Misclick destroys work.
-**What to do:**
-- Add class `btn-new-tab` to the button
-- `.btn-ghost.btn-new-tab:hover { color: var(--red); }`
-- Already has ⚠ prefix from prior work — keep it
 
 ### [ ] Home screen value prop for first-time visitors
 **Size:** S
@@ -121,12 +49,6 @@ important card should be visually distinct.
 - Style: centered, large-ish font, muted subtext, fades in with the step animation
 - Hide it once the user has any recent tabs (returning users don't need it)
 
-### [ ] Person removal confirmation shows amounts
-**Size:** XS
-**Why:** Confirm dialog lists expense names but not amounts. Users can't judge what they're losing.
-**What to do:**
-- Change the affected expenses list to: `• ${e.desc} (${fmt(e.amount)})`
-
 ### [ ] Sub-dollar balance treatment
 **Size:** S
 **Why:** "Chris owes $0.82" creates real-world awkwardness. Tiny residuals should be
@@ -136,23 +58,6 @@ visually softened.
   `is-micro` to the card
 - `.person-card.is-micro { opacity: 0.65; }`
 - Change verdict text to "basically settled ($0.82)" in muted color
-
-### [ ] PWA manifest — move from data URI to real file
-**Size:** S
-**Why:** Chrome on Android won't show "Add to Home Screen" for data URI manifests.
-**What to do:**
-- Decode the current base64 manifest content and save as `/manifest.json`
-- Change `<link rel="manifest">` to `href="/manifest.json"`
-- Verify icons are referenced correctly
-
-### [ ] Check og-image.png exists in repo root
-**Size:** XS
-**Why:** Meta tags reference `/og-image.png` — if missing, all share link previews
-show a broken image.
-**What to do:**
-- Check repo root for `og-image.png`
-- If missing: create a simple 1200×630 SVG/PNG with the SettlingUp logo on dark
-  background and save as `og-image.png`
 
 ---
 
@@ -303,3 +208,40 @@ When re-prioritizing:
 1. Move items between tiers
 2. Note the reason for the change
 3. Message the owner with the proposed re-prioritization before acting on it
+
+---
+
+## ✅ Done
+
+### [x] Penny rounding — whole-cent splits everywhere
+**Done:** PRs #11, #12 — `splitEvenly()` helper with integer cent arithmetic + ID-seeded rotation for fair penny distribution across expenses.
+
+### [x] markDone() uses list index, not stable payment identity
+**Done:** PR #12 — chip id is `done-${pay.from}-${pay.to}`; `markDone()` takes element + pay object; marked state persists across re-renders.
+
+### [x] editExpense() leaves top amount field blank
+**Done:** PR #12 — `editExpense()` sets `exp-amount-top` to `exp.amount.toFixed(2)`; `cancelEdit()` clears it.
+
+### [x] goHome() silently destroys unsaved local-mode data
+**Done:** PR #10 — `goHome()` shows confirm dialog when not on step 0, has unsaved people/expenses, and no tabId.
+
+### [x] Realtime INSERT race: _pendingLocalIds never checked
+**Done:** PR #10 — INSERT handler returns early if `_pendingLocalIds.size > 0`.
+
+### [x] Keyboard Enter submits expense form
+**Done:** PR #10 — `onkeydown` Enter handler on `#exp-desc`, `#exp-amount-top`, `#exp-tax`, `#exp-tip`.
+
+### [x] "You" card accent border + badge on settle page
+**Done:** PR #10 — `.person-card.you-card { border-color: var(--accent) }` + `.you-badge` span in card header.
+
+### [x] "New tab" button danger styling
+**Done:** PR #10 — `btn-new-tab` class on button + `.btn-ghost.btn-new-tab:hover { color: var(--red) }` CSS rule.
+
+### [x] Person removal confirmation shows amounts
+**Done:** PR #10 — affected expenses listed as `• ${e.desc} (${fmt(e.amount)})`.
+
+### [x] PWA manifest — move from data URI to real file
+**Done:** PR #11 — `/manifest.json` created; `<link rel="manifest">` updated to use file path. Fixes Android "Add to Home Screen".
+
+### [x] Check og-image.png exists in repo root
+**Done:** `og-image.png` confirmed present in repo root.
