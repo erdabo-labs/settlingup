@@ -7,7 +7,7 @@
 <!-- Icons & PWA -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTkyIj48cmVjdCB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgcng9IjQyIiBmaWxsPSIjMDBkNGZmIi8+PHBvbHlnb24gcG9pbnRzPSI5Niw0NCAxMzYsMTA0IDExMSwxMDQgMTExLDE0OCA4MSwxNDggODEsMTA0IDU2LDEwNCIgZmlsbD0iIzA1MGQxZSIvPjwvc3ZnPg==">
 <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTkyIj48cmVjdCB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgcng9IjQyIiBmaWxsPSIjMDBkNGZmIi8+PHBvbHlnb24gcG9pbnRzPSI5Niw0NCAxMzYsMTA0IDExMSwxMDQgMTExLDE0OCA4MSwxNDggODEsMTA0IDU2LDEwNCIgZmlsbD0iIzA1MGQxZSIvPjwvc3ZnPg==">
-<link rel="manifest" href="data:application/manifest+json;base64,ewogICJuYW1lIjogIlNldHRsaW5nVXAiLAogICJzaG9ydF9uYW1lIjogIlNldHRsaW5nVXAiLAogICJkZXNjcmlwdGlvbiI6ICJTcGxpdCBleHBlbnNlcyB3aXRoIGZyaWVuZHMiLAogICJzdGFydF91cmwiOiAiLyIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzA1MGQxZSIsCiAgInRoZW1lX2NvbG9yIjogIiMwMGQ0ZmYiLAogICJpY29ucyI6IFsKICAgIHsic3JjIjogImRhdGE6aW1hZ2Uvc3ZnK3htbDtiYXNlNjQsUEhOMlp5QjRiV3h1Y3owaWFIUjBjRG92TDNkM2R5NTNNeTV2Y21jdk1qQXdNQzl6ZG1jaUlIWnBaWGRDYjNnOUlqQWdNQ0F4T1RJZ01Ua3lJajQ4Y21WamRDQjNhV1IwYUQwaU1Ua3lJaUJvWldsbmFIUTlJakU1TWlJZ2NuZzlJalF5SWlCbWFXeHNQU0lqTURCa05HWm1JaTgrUEhCdmJIbGdiMjRnY0c5cGJuUnpQU0k1Tml3ME5DQXhNallzTVRBMElERXhNU3d4TURRZ01URXhMREUwT0NBNE1Td3hORGdnT0RFc01UQTBJRFUyTERFd05DSWdabWxzYkQwaUl6QTFNR1F4WlNJdlBqd3ZjM1puUGc9PSIsICJzaXplcyI6ICIxOTJ4MTkyIiwgInR5cGUiOiAiaW1hZ2Uvc3ZnK3htbCJ9LAogICAgeyJzcmMiOiAiZGF0YTppbWFnZS9zdmcreG1sO2Jhc2U2NCxQSE4yWnlCNGJXeHVjejBpYUhSMGNEb3ZMM2QzZHk1M015NXZjbWN2TWpBd01DOXpkbWNpSUhacFpYZENiM2c5SWpBZ01DQXhPVElnTVRreUlqNDhjbVZqZENCM2FXUjBhRDBpTVRreUlpQm9aV2xuYUhROUlqRTVNaUlnY25nOUlqUXlJaUJtYVd4c1BTSWpNREJrTkdabUlpOCtQSEJ2YkhsZ2IyNGdjRzlwYm5SelBTSTVOaXcwTkNBeE16WXNNVEEwSURFeE1Td3hNRFFnTVRFeExERTBPQ0E0TVN3eE5EZ2dPREVzTVRBMElEVTJMREV3TkNJZ1ptbHNiRDBpSXpBMU1HUXhaU0l2UGp3dmMzWm5QZz09IiwgInNpemVzIjogIjUxMng1MTIiLCAidHlwZSI6ICJpbWFnZS9zdmcreG1sIn0KICBdCn0=">
+<link rel="manifest" href="/manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SettlingUp">
@@ -158,7 +158,8 @@ body {
 
 /* TYPOGRAPHY */
 .section-title { font-family:'Outfit',sans-serif;font-size:24px;font-weight:700;margin-bottom:4px;letter-spacing:-0.3px; }
-.section-sub { color:var(--text2);font-size:14px;margin-bottom:20px; }
+.section-sub { color:var(--text2);font-size:14px;margin-bottom:12px; }
+.section-tagline { font-size:13px;color:var(--text3);margin-bottom:18px;font-style:italic; }
 
 /* GLASS CARD */
 .card { background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:12px;position:relative;overflow:hidden;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px); }
@@ -180,6 +181,7 @@ select option { background:var(--bg2);color:var(--text); }
 .btn-secondary:hover { border-color:var(--border2); }
 .btn-ghost { background:transparent;color:var(--text2);padding:13px 14px; }
 .btn-ghost:hover { color:var(--text); }
+.btn-ghost.btn-new-tab:hover { color:var(--red); }
 .btn-danger { background:transparent;color:var(--red);border:1px solid var(--red-bg);padding:7px 11px;font-size:12px;border-radius:8px; }
 .btn-danger:hover { background:var(--red-bg); }
 .btn-full { width:100%; }
@@ -271,6 +273,8 @@ select option { background:var(--bg2);color:var(--text); }
 .person-card.is-zero { border-left:3px solid var(--text3); }
 /* NEW: fully settled via payments */
 .person-card.is-settled { border-left:3px solid var(--green); }
+.person-card.you-card { border-color: var(--accent); }
+.you-badge { font-size:10px;background:var(--accent-bg);color:var(--accent);padding:2px 7px;border-radius:99px;font-weight:700;margin-left:6px;text-transform:uppercase;letter-spacing:0.5px; }
 .person-card-header { display:flex;align-items:center;gap:10px;padding:13px 14px 10px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent; }
 .person-card-name { font-weight:600;font-size:15px;flex:1; }
 .person-card-verdict { font-family:var(--num);font-weight:600;font-size:13px; }
@@ -501,6 +505,7 @@ select option { background:var(--bg2);color:var(--text); }
   <div class="step active" id="step-0">
     <div class="section-title">Name your tab</div>
     <div class="section-sub">What's the occasion?</div>
+    <p class="section-tagline">Split expenses fairly. No sign-up, no faff.</p>
     <div class="card">
       <div class="form-label">Tab name</div>
       <input class="input-big" id="tab-name" type="text" placeholder="Summer Trip 2026" maxlength="60" autocomplete="off">
@@ -578,11 +583,11 @@ select option { background:var(--bg2);color:var(--text); }
       <div class="form-row" style="margin-bottom:12px;">
         <div style="flex:2;">
           <div class="form-label">Description</div>
-          <input id="exp-desc" type="text" placeholder="Gas, Dinner, Hotel…" autocomplete="off">
+          <input id="exp-desc" type="text" placeholder="Gas, Dinner, Hotel…" autocomplete="off" onkeydown="if(event.key==='Enter') addExpense()">
         </div>
         <div id="amount-top-wrap" style="flex:1;">
           <div class="form-label">Amount ($)</div>
-          <input id="exp-amount-top" type="number" placeholder="0.00" min="0" step="0.01" oninput="onAmountTopInput()">
+          <input id="exp-amount-top" type="number" placeholder="0.00" min="0" step="0.01" oninput="onAmountTopInput()" onkeydown="if(event.key==='Enter') addExpense()">
         </div>
       </div>
       <div class="form-label" style="margin-bottom:8px;">Who paid?</div>
@@ -594,9 +599,10 @@ select option { background:var(--bg2);color:var(--text); }
         <div class="split-tab" onclick="setSplitType('custom')" id="tab-custom">Custom</div>
         <div class="split-tab" onclick="setSplitType('personal')" id="tab-personal">Personal</div>
       </div>
-      <!-- Even: nothing extra needed, amount is at the top -->
+      <!-- Even: who's included toggle -->
       <div id="split-even-ui">
-        <div style="font-size:12px;color:var(--text2);margin-top:2px;">Splits evenly among everyone on the tab.</div>
+        <div class="person-btn-grid" id="even-split-who" style="margin-top:10px;"></div>
+        <div id="even-split-info" style="font-size:12px;color:var(--text2);margin-top:6px;"></div>
       </div>
       <!-- Custom: per-person rows; total box syncs with top amount field -->
       <div id="split-custom-ui" style="display:none">
@@ -606,8 +612,8 @@ select option { background:var(--bg2);color:var(--text); }
         </div>
         <div class="custom-amount-rows" id="custom-amount-rows"></div>
         <div class="tax-tip-row">
-          <div><div class="form-label">Tax <span class="optional-label">opt</span></div><input id="exp-tax" type="number" placeholder="0.00" min="0" step="0.01" oninput="onTaxTipInput()"></div>
-          <div><div class="form-label">Tip <span class="optional-label">opt</span></div><input id="exp-tip" type="number" placeholder="0.00" min="0" step="0.01" oninput="onTaxTipInput()"></div>
+          <div><div class="form-label">Tax <span class="optional-label">opt</span></div><input id="exp-tax" type="number" placeholder="0.00" min="0" step="0.01" oninput="onTaxTipInput()" onkeydown="if(event.key==='Enter') addExpense()"></div>
+          <div><div class="form-label">Tip <span class="optional-label">opt</span></div><input id="exp-tip" type="number" placeholder="0.00" min="0" step="0.01" oninput="onTaxTipInput()" onkeydown="if(event.key==='Enter') addExpense()"></div>
         </div>
       </div>
       <!-- Personal: who is it for, amount is at the top -->
@@ -616,6 +622,7 @@ select option { background:var(--bg2);color:var(--text); }
         <div class="person-btn-grid" id="personalfor-btns"></div>
       </div>
       <div class="btn-row"><button id="add-expense-btn" class="btn btn-primary btn-full" onclick="addExpense()">+ Add expense</button></div>
+      <div id="expense-form-error" style="display:none;font-size:12px;color:var(--red);margin-top:8px;text-align:center;"></div>
     </div>
     <div class="btn-row">
       <button class="btn btn-ghost" onclick="goStep(1)">← Back</button>
@@ -663,7 +670,7 @@ select option { background:var(--bg2);color:var(--text); }
     </div>
     <div class="btn-row" style="justify-content:center;">
       <button class="btn btn-secondary" onclick="goStep(2)">← Edit expenses</button>
-      <button class="btn btn-ghost" onclick="startOver()">New tab</button>
+      <button class="btn btn-ghost btn-new-tab" onclick="startOver()">⚠ New tab</button>
     </div>
   </div>
 
@@ -731,8 +738,21 @@ let _markedPayments = [];
 const COLORS = ['av-0','av-1','av-2','av-3','av-4','av-5','av-6','av-7'];
 function avatarClass(i) { return COLORS[i % COLORS.length]; }
 function initials(n) { return n.trim().split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,2); }
-function fmt(n) { return '$' + Math.abs(n).toFixed(2); }
+function fmt(n) { const v = Number(n); return '$' + (isNaN(v) ? '0.00' : Math.abs(v).toFixed(2)); }
 function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/**
+ * Split `total` (in dollars) evenly among `n` people.
+ * Returns an array of n cent-exact amounts that sum exactly to total.
+ * The first `remainder` people each get 1 extra cent.
+ */
+function splitEvenly(total, n) {
+  if(!n || n <= 0) return [];
+  const totalCents = Math.round(total * 100);
+  const base = Math.floor(totalCents / n);
+  const remainder = totalCents - base * n;
+  return Array.from({length: n}, (_, i) => (base + (i < remainder ? 1 : 0)) / 100);
+}
 let _tempIdSeq = -1;
 function nextTempId() { return _tempIdSeq--; }
 
@@ -772,6 +792,11 @@ async function goStep(n) {
 }
 
 function goHome() {
+  const hasWork = state.people.length > 0 || state.expenses.length > 0;
+  const isOnStep0 = document.getElementById('step-0').classList.contains('active');
+  if(!isOnStep0 && hasWork && !state.tabId) {
+    if(!confirm('Leave this tab? Any unsaved expenses will be lost.')) return;
+  }
   window.location.href = '/';
 }
 
@@ -807,10 +832,10 @@ async function removePerson(id) {
   if(!person) return;
   const affected = state.expenses.filter(e => e.paidBy === id || e.splitWith.includes(id));
   if(affected.length) {
-    const names = [...new Set(affected.map(e => e.desc))].slice(0, 5);
+    const names = affected.slice(0, 5).map(e => `• ${e.desc} (${fmt(e.amount)})`);
     const more = affected.length > 5 ? ` and ${affected.length - 5} more` : '';
     const ok = confirm(
-      `Remove ${person.name}?\n\nThis will also delete ${affected.length} expense${affected.length !== 1 ? 's' : ''} they're on:\n• ${names.join('\n• ')}${more}\n\nThis cannot be undone.`
+      `Remove ${person.name}?\n\nThis will also delete ${affected.length} expense${affected.length !== 1 ? 's' : ''} they're on:\n${names.join('\n')}${more}\n\nThis cannot be undone.`
     );
     if(!ok) return;
     for(const exp of affected) {
@@ -883,11 +908,35 @@ function startRenamePerson(id) {
 
 // ─── EXPENSES ────────────────────────────────────────────
 let selectedPaidBy = null, selectedPersonalFor = null;
+let _evenSplitIncluded = new Set(); // tracks which person IDs are included in the even split
+
+let _formErrorTimer = null;
+function showFormError(msg) {
+  const el = document.getElementById('expense-form-error');
+  if(!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(_formErrorTimer);
+  _formErrorTimer = setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+function clearFormError() {
+  const el = document.getElementById('expense-form-error');
+  if(el) el.style.display = 'none';
+  clearTimeout(_formErrorTimer);
+}
+function highlightField(id) {
+  const el = document.getElementById(id);
+  if(!el) return;
+  const prev = el.style.borderColor;
+  el.style.borderColor = 'var(--red)';
+  setTimeout(() => { el.style.borderColor = prev; }, 1500);
+}
 
 function renderExpenseStep() {
   selectedPaidBy = null; selectedPersonalFor = null;
   const nameEl = document.getElementById('step2-tab-name');
   if(nameEl && !nameEl.querySelector('input')) nameEl.textContent = state.tabName || 'Your Tab';
+  _evenSplitIncluded = new Set(state.people.map(p => p.id));
   renderPaidByBtns(); renderPersonalForBtns(); renderCustomAmountRows();
   setSplitType('even'); renderExpenseList();
 }
@@ -982,26 +1031,16 @@ function toggleCustomInclude(id) {
 }
 
 function splitEvenlyCustom() {
-  // Reads from the top amount field; if empty, falls back to sum of per-person amounts
   let total = parseFloat(document.getElementById('exp-amount-top')?.value) || 0;
   if(!total || total <= 0) {
-    const includedSum = state.people.reduce((s,p) => {
-      const row = document.getElementById('crow-'+p.id);
-      if(!row || !row.classList.contains('included')) return s;
-      return s + (parseFloat(document.getElementById('custom-amt-'+p.id)?.value)||0);
-    }, 0);
-    if(!includedSum || includedSum <= 0) {
-      const btn = document.querySelector('.btn-split-even');
-      if(btn) {
-        const prev = btn.style.color;
-        btn.style.color = 'var(--red)';
-        setTimeout(() => { btn.style.color = prev; }, 1500);
-      }
-      return;
+    const btn = document.querySelector('.btn-split-even');
+    if(btn) {
+      const prev = btn.style.color;
+      btn.style.color = 'var(--red)';
+      setTimeout(() => { btn.style.color = prev; }, 1500);
     }
-    total = includedSum;
+    return;
   }
-  _customTotalSource = 'top';
   const tax = parseFloat(document.getElementById('exp-tax')?.value) || 0;
   const tip = parseFloat(document.getElementById('exp-tip')?.value) || 0;
   const base = total - tax - tip;
@@ -1010,17 +1049,13 @@ function splitEvenlyCustom() {
     return row && row.classList.contains('included');
   });
   if(!included.length) return;
-  const share = base / included.length;
-  included.forEach((p, idx) => {
+  const shares = splitEvenly(base, included.length);
+  included.forEach((p, i) => {
     const inp = document.getElementById('custom-amt-'+p.id);
-    if(!inp) return;
-    if(idx === included.length - 1) {
-      const soFar = included.slice(0,-1).reduce((s,pp) => s + (parseFloat(document.getElementById('custom-amt-'+pp.id)?.value)||0), 0);
-      inp.value = Math.round((base - soFar) * 100) / 100;
-    } else {
-      inp.value = Math.round(share * 100) / 100;
-    }
+    if(inp) inp.value = shares[i].toFixed(2);
   });
+  _customTotalSource = 'bottom';
+  updateCustomTotal();
 }
 
 
@@ -1033,6 +1068,8 @@ function onAmountTopInput() {
   if(state.currentSplitType === 'custom') {
     _customTotalSource = 'top';
     splitEvenlyCustom();
+  } else if(state.currentSplitType === 'even') {
+    updateEvenSplitInfo();
   }
 }
 
@@ -1069,34 +1106,100 @@ function setSplitType(type) {
     const topAmt = parseFloat(document.getElementById('exp-amount-top')?.value) || 0;
     if(topAmt > 0) splitEvenlyCustom();
   }
+  if(type === 'even') {
+    renderEvenSplitWho();
+  }
+}
+
+function renderEvenSplitWho() {
+  const wrap = document.getElementById('even-split-who');
+  if(!wrap) return;
+  wrap.innerHTML = state.people.map((p, i) => {
+    const included = _evenSplitIncluded.has(p.id);
+    return `<button class="person-btn${included ? ' selected-payer' : ''}" id="esw-${p.id}" onclick="toggleEvenInclude(${p.id})">
+      <span class="person-avatar ${avatarClass(i)}" style="width:22px;height:22px;font-size:10px;border-radius:50%;display:inline-grid;place-items:center;flex-shrink:0;">${initials(p.name)}</span>
+      ${pName(p)}
+    </button>`;
+  }).join('');
+  updateEvenSplitInfo();
+}
+
+function toggleEvenInclude(id) {
+  if(_evenSplitIncluded.has(id)) {
+    _evenSplitIncluded.delete(id);
+  } else {
+    _evenSplitIncluded.add(id);
+  }
+  const btn = document.getElementById('esw-'+id);
+  if(btn) btn.classList.toggle('selected-payer', _evenSplitIncluded.has(id));
+  updateEvenSplitInfo();
+}
+
+function updateEvenSplitInfo() {
+  const el = document.getElementById('even-split-info');
+  if(!el) return;
+  const n = _evenSplitIncluded.size;
+  const amount = parseFloat(document.getElementById('exp-amount-top')?.value) || 0;
+  if(n === 0) {
+    el.textContent = 'Select at least one person.';
+    return;
+  }
+  if(amount > 0) {
+    const each = Math.floor(Math.round(amount * 100) / n) / 100;
+    el.textContent = `Splitting ${fmt(amount)} among ${n} ${n === 1 ? 'person' : 'people'} — ${fmt(each)} each`;
+  } else {
+    el.textContent = `Splitting among ${n} ${n === 1 ? 'person' : 'people'}`;
+  }
 }
 
 async function addExpense() {
+  clearFormError();
   const desc = document.getElementById('exp-desc').value.trim();
-  if(!desc) { alert('Give this expense a description.'); return; }
-  if(selectedPaidBy === null) { alert('Select who paid.'); return; }
+  if(!desc) { showFormError('Give this expense a description.'); highlightField('exp-desc'); return; }
+  if(selectedPaidBy === null) { showFormError('Select who paid.'); highlightField('paidby-btns'); return; }
 
   let amount = 0, splitWith = [], splitAmounts = null;
   if(state.currentSplitType === 'even') {
     amount = parseFloat(document.getElementById('exp-amount-top').value);
-    if(!amount || amount <= 0) { alert('Enter a valid amount.'); return; }
-    splitWith = state.people.map(p => p.id);
+    if(!amount || !isFinite(amount)) { showFormError('Enter a valid amount.'); highlightField('exp-amount-top'); return; }
+    if(amount <= 0) { showFormError('Amount must be a positive number.'); highlightField('exp-amount-top'); return; }
+    splitWith = state.people.filter(p => _evenSplitIncluded.has(p.id)).map(p => p.id);
+    if(!splitWith.length) { showFormError('Select at least one person to split with.'); return; }
+    splitAmounts = {};
+    const shares = splitEvenly(amount, splitWith.length);
+    splitWith.forEach((id, i) => { splitAmounts[id] = shares[i]; });
   } else if(state.currentSplitType === 'custom') {
     const tax = parseFloat(document.getElementById('exp-tax').value) || 0;
     const tip = parseFloat(document.getElementById('exp-tip').value) || 0;
     const subs = {}; let sub = 0;
     state.people.forEach(p => { const v = parseFloat(document.getElementById('custom-amt-'+p.id)?.value)||0; subs[p.id]=v; sub+=v; });
-    if(sub <= 0) { alert("Enter at least one person's amount."); return; }
+    if(sub <= 0) { showFormError("Enter at least one person's amount."); return; }
+    // Compute raw shares then apply largest-remainder rounding
+    const rawShares = {};
+    state.people.forEach(p => { const base=subs[p.id]; rawShares[p.id] = base + (sub > 0 ? (base/sub)*(tax+tip) : 0); });
     splitAmounts = {};
-    state.people.forEach(p => { const base=subs[p.id]; splitAmounts[p.id]=Math.round((base+(base/sub)*(tax+tip))*100)/100; });
+    state.people.forEach(p => { splitAmounts[p.id] = Math.round(rawShares[p.id] * 100) / 100; });
+    // Largest-remainder fix: adjust for any 1-cent discrepancy
+    const _targetCents = Math.round((sub + tax + tip) * 100);
+    const _sumCents = Object.values(splitAmounts).reduce((s,v) => s + Math.round(v*100), 0);
+    const _diff = _targetCents - _sumCents;
+    if(_diff !== 0) {
+      let winnerId = null, maxFrac = -1;
+      state.people.forEach(p => {
+        if(!(subs[p.id] > 0)) return;
+        const frac = rawShares[p.id] - Math.floor(rawShares[p.id]*100)/100;
+        if(frac > maxFrac) { maxFrac = frac; winnerId = p.id; }
+      });
+      if(winnerId !== null) splitAmounts[winnerId] = Math.round((splitAmounts[winnerId] + _diff/100)*100)/100;
+    }
     // Remove zero/null entries so ghost people don't appear in splitAmounts or splitWith
     Object.keys(splitAmounts).forEach(k => { if(!(splitAmounts[k] > 0)) delete splitAmounts[k]; });
     amount = Math.round(Object.values(splitAmounts).reduce((s,v) => s+v, 0)*100)/100;
     splitWith = Object.keys(splitAmounts).map(Number);
   } else {
-    if(selectedPersonalFor === null) { alert('Select who this is for.'); return; }
+    if(selectedPersonalFor === null) { showFormError('Select who this is for.'); return; }
     amount = parseFloat(document.getElementById('exp-amount-top').value);
-    if(!amount || amount <= 0) { alert('Enter a valid amount.'); return; }
+    if(!amount || !isFinite(amount) || amount <= 0) { showFormError('Enter a valid amount.'); highlightField('exp-amount-top'); return; }
     splitWith = [selectedPersonalFor];
   }
 
@@ -1140,6 +1243,8 @@ function clearExpenseForm() {
   if(document.getElementById('exp-tip')) document.getElementById('exp-tip').value = '';
   _customTotalSource = 'top';
   selectedPaidBy = null; selectedPersonalFor = null;
+  _evenSplitIncluded = new Set(state.people.map(p => p.id));
+  clearFormError();
   document.querySelectorAll('#paidby-btns .person-btn').forEach(b => b.classList.remove('selected-payer'));
   document.querySelectorAll('#personalfor-btns .person-btn').forEach(b => b.classList.remove('selected-for'));
   setSplitType(_lastSplitType); renderCustomAmountRows();
@@ -1250,6 +1355,8 @@ function renderExpenseList() {
 // ─── SETTLE MATH ─────────────────────────────────────────
 function computeDirectPayments(balances) {
   const EPS = 0.005, debts = {};
+  // Normalise balances to nearest cent before processing
+  for(const id in balances) balances[id] = Math.round(balances[id] * 100) / 100;
   state.people.forEach(p => { debts[p.id] = {}; state.people.forEach(q => { debts[p.id][q.id] = 0; }); });
   state.expenses.forEach(exp => {
     const payer = exp.paidBy;
@@ -1555,7 +1662,7 @@ function renderSettleStep(balances) {
     return `<div class="person-card ${cc}${itsMe?' you-card':''}" id="pcard-${p.id}">
       <div class="person-card-header" onclick="toggleCard(${p.id})">
         <div class="person-avatar ${avatarClass(i)}" style="width:32px;height:32px;font-size:13px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;">${initials(p.name)}</div>
-        <div class="person-card-name">${itsMe?'You':escHtml(p.name)}</div>
+        <div class="person-card-name">${itsMe?'You':escHtml(p.name)}${itsMe?'<span class="you-badge">You</span>':''}</div>
         <div class="person-card-verdict ${isFullySettledByPayments?'zero':vc}">${verdict}</div>
         <span class="expand-chevron">▼</span>
       </div>
@@ -1602,7 +1709,7 @@ function renderPaymentsList(payments) {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin-left:10px;flex-shrink:0;">
         <div class="payment-amount">${fmt(pay.amount)}</div>
-        <div class="done-chip${marked?' marked':''}" id="done-${i}"
+        <div class="done-chip${marked?' marked':''}" id="done-${pay.from}-${pay.to}"
           onclick="markDone(this, ${JSON.stringify(pay).replace(/"/g,'&quot;')})">
           ${marked ? '✓ Paid' : 'Mark paid'}
         </div>
@@ -1903,6 +2010,8 @@ function subscribeToTab(tabId) {
       {event:'INSERT', schema:'public', table:'expenses', filter:'tab_id=eq.'+tabId},
       payload => {
         const exp = rowToExpense(payload.new);
+        // Skip if our own save is still in flight (avoids brief duplicate cards)
+        if(_pendingLocalIds.size > 0) return;
         if(state.expenses.find(e => e.id === exp.id)) return;
         state.expenses.push(exp);
         refreshAfterRemoteChange();
