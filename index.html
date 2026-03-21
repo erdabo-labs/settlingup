@@ -242,6 +242,12 @@ select option { background:var(--bg2);color:var(--text); }
 .tab-nameplate-name { font-family:'Outfit',sans-serif;font-size:26px;font-weight:800;letter-spacing:-0.4px;line-height:1.1;color:var(--text);margin-bottom:2px; }
 .tab-nameplate-label { font-size:13px;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;font-weight:600; }
 
+/* EDITABLE TITLE */
+.editable-title { cursor:text;display:inline-flex;align-items:center;gap:6px; }
+.editable-title .edit-pencil { opacity:0;font-size:0.7em;cursor:pointer;transition:opacity 0.15s; }
+.editable-title:hover .edit-pencil { opacity:1; }
+.editable-title-input { font-family:inherit;font-size:inherit;font-weight:inherit;letter-spacing:inherit;line-height:inherit;color:inherit;background:transparent;border:none;border-bottom:2px solid var(--accent);outline:none;padding:0;min-width:60px;width:auto; }
+
 /* SETTLE HERO */
 .settle-hero { text-align:center;padding:20px 0 18px; }
 .confetti-wrap { display:flex;justify-content:center;gap:4px;font-size:22px;margin-bottom:10px; }
@@ -326,12 +332,12 @@ select option { background:var(--bg2);color:var(--text); }
 .payment-amount { font-family:var(--num);font-weight:600;font-size:18px;color:var(--accent);white-space:nowrap; }
 /* NEW: paid amount strikethrough */
 .payment-card.is-paid .payment-amount { text-decoration:line-through;color:var(--text3); }
-.done-chip { display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:99px;background:var(--green-bg);color:var(--green);font-size:12px;font-weight:600;cursor:pointer;border:1px solid rgba(0,230,118,0.25);transition:all 0.15s;white-space:nowrap;-webkit-tap-highlight-color:transparent; }
-[data-theme="light"] .done-chip { border-color:rgba(26,122,69,0.25); }
-.done-chip:hover { background:rgba(0,230,118,0.18); }
+.done-chip { display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:99px;background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border2);transition:all 0.15s;white-space:nowrap;-webkit-tap-highlight-color:transparent; }
+.done-chip:hover { color:var(--text);border-color:var(--text3); }
 /* NEW: saving state for done-chip */
 .done-chip.saving { opacity:0.6;pointer-events:none; }
 .done-chip.marked { background:var(--green);color:var(--bg);border-color:var(--green); }
+.done-chip.marked:hover { opacity:0.85; }
 
 /* MISC */
 .empty { text-align:center;padding:28px;color:var(--text2);font-style:italic;font-size:14px;border:1px dashed var(--border);border-radius:12px;margin-bottom:12px; }
@@ -554,7 +560,7 @@ select option { background:var(--bg2);color:var(--text); }
   <!-- STEP 2 -->
   <div class="step" id="step-2">
     <div class="tab-nameplate" id="step2-nameplate">
-      <div class="tab-nameplate-name" id="step2-tab-name"></div>
+      <div class="tab-nameplate-name" id="step2-tab-name"><span class="editable-title" onclick="startTabNameEdit('step2')"><span id="step2-tab-name-text"></span><span class="edit-pencil" title="Rename tab">✏️</span></span></div>
       <div class="tab-nameplate-label">Add expenses</div>
     </div>
     <div id="demo-banner-2" style="display:none;" class="demo-banner">
@@ -622,7 +628,7 @@ select option { background:var(--bg2);color:var(--text); }
   <div class="step" id="step-3">
     <div class="settle-hero">
       <div class="confetti-wrap" id="confetti">🎉</div>
-      <div class="settle-hero-tab-name" id="settle-tab-name"></div>
+      <div class="settle-hero-tab-name" id="settle-tab-name"><span class="editable-title" onclick="startTabNameEdit('settle')"><span id="settle-tab-name-text"></span><span class="edit-pencil" title="Rename tab">✏️</span></span></div>
       <div class="settle-hero-title">Here's how we're <span>settling up</span></div>
     </div>
     <div class="summary-bar" id="summary-bar"></div>
@@ -631,7 +637,6 @@ select option { background:var(--bg2);color:var(--text); }
       <span class="demo-banner-text">🎭 This is a demo tab — edit freely, or load a fresh one anytime from the home screen.</span>
       <button class="demo-banner-close" onclick="dismissDemoBanner(3)">✕</button>
     </div>
-    <div class="person-cards" id="person-cards"></div>
     <div class="payments-row">
       <div class="payments-title">Who pays who <span class="pill" id="payment-count">0</span></div>
       <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
@@ -651,6 +656,7 @@ select option { background:var(--bg2);color:var(--text); }
     </div>
     <div id="payments-list"></div>
     <hr class="divider">
+    <div class="person-cards" id="person-cards"></div>
     <div class="share-row">
       <button class="share-btn" id="share-btn" onclick="shareTab(this)">🔗 Share this tab</button>
     </div>
@@ -819,13 +825,56 @@ function renderPeopleList() {
   const l = document.getElementById('people-list');
   const wrap = document.getElementById('identity-step1-wrap');
   if(!state.people.length) { l.innerHTML=''; if(wrap) wrap.style.display='none'; return; }
+  if(wrap) wrap.style.display='';
   l.innerHTML = state.people.map((p,i) =>
-    `<div class="person-chip">
+    `<div class="person-chip" id="person-chip-${p.id}">
       <div class="person-avatar ${avatarClass(i)}">${initials(p.name)}</div>
       <div class="person-name">${pName(p)}</div>
+      <button class="btn-edit" onclick="startPersonRename(${p.id})" title="Rename">✏️</button>
       <button class="btn btn-danger" onclick="removePerson(${p.id})">✕</button>
     </div>`
   ).join('');
+}
+
+function startPersonRename(id) {
+  const p = state.people.find(pp => pp.id === id);
+  if(!p) return;
+  const chip = document.getElementById('person-chip-' + id);
+  if(!chip) return;
+  const nameDiv = chip.querySelector('.person-name');
+  if(!nameDiv) return;
+  const prev = p.name;
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.value = prev;
+  inp.style.cssText = 'font-family:inherit;font-size:inherit;font-weight:inherit;color:inherit;background:transparent;border:none;border-bottom:2px solid var(--accent);outline:none;padding:0;min-width:60px;flex:1;';
+  nameDiv.replaceWith(inp);
+  inp.focus();
+  inp.select();
+  function commit() {
+    const val = inp.value.trim();
+    const isDuplicate = state.people.some(pp => pp.id !== id && pp.name.toLowerCase() === val.toLowerCase());
+    if(!val || isDuplicate) { cancel(); return; }
+    p.name = val;
+    if(db && state.tabId) syncTabMeta();
+    updateIdentityChip();
+    if(document.getElementById('step-2').classList.contains('active')) {
+      renderPaidByBtns(); renderPersonalForBtns(); renderCustomAmountRows();
+    }
+    if(document.getElementById('step-3').classList.contains('active')) {
+      goSettle();
+    }
+    renderPeopleList();
+  }
+  function cancel() {
+    p.name = prev;
+    renderPeopleList();
+  }
+  inp.addEventListener('keydown', e => {
+    if(e.key === 'Enter') { e.preventDefault(); commit(); }
+    else if(e.key === 'Escape') { e.preventDefault(); cancel(); }
+  });
+  inp.addEventListener('blur', commit);
 }
 
 // ─── EXPENSES ────────────────────────────────────────────
@@ -833,10 +882,68 @@ let selectedPaidBy = null, selectedPersonalFor = null;
 
 function renderExpenseStep() {
   selectedPaidBy = null; selectedPersonalFor = null;
-  const nameEl = document.getElementById('step2-tab-name');
+  const nameEl = document.getElementById('step2-tab-name-text');
   if(nameEl) nameEl.textContent = state.tabName || 'Your Tab';
   renderPaidByBtns(); renderPersonalForBtns(); renderCustomAmountRows();
   setSplitType('even'); renderExpenseList();
+}
+
+function startTabNameEdit(which) {
+  // which: 'step2' or 'settle'
+  const textSpanId = which === 'step2' ? 'step2-tab-name-text' : 'settle-tab-name-text';
+  const textSpan = document.getElementById(textSpanId);
+  if(!textSpan) return;
+  const container = textSpan.closest('.editable-title');
+  if(!container) return;
+  // prevent double-editing
+  if(container.querySelector('.editable-title-input')) return;
+  const prev = state.tabName || 'Your Tab';
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.value = prev;
+  inp.className = 'editable-title-input';
+  inp.style.width = Math.max(80, prev.length * 14) + 'px';
+  container.replaceWith(inp);
+  inp.focus();
+  inp.select();
+  function commit() {
+    const val = inp.value.trim();
+    if(!val) { restore(); return; }
+    state.tabName = val;
+    document.getElementById('tab-name').value = val;
+    // update both text spans
+    const s2 = document.getElementById('step2-tab-name-text');
+    if(s2) s2.textContent = val;
+    const st = document.getElementById('settle-tab-name-text');
+    if(st) st.textContent = val;
+    if(db && state.tabId) syncTabMeta();
+    restoreContainer();
+  }
+  function restore() {
+    inp.value = prev;
+    restoreContainer();
+  }
+  function restoreContainer() {
+    // rebuild the editable-title span in place
+    const newContainer = document.createElement('span');
+    newContainer.className = 'editable-title';
+    newContainer.onclick = () => startTabNameEdit(which);
+    const nameSpan = document.createElement('span');
+    nameSpan.id = textSpanId;
+    nameSpan.textContent = state.tabName || 'Your Tab';
+    const pencil = document.createElement('span');
+    pencil.className = 'edit-pencil';
+    pencil.title = 'Rename tab';
+    pencil.textContent = '✏️';
+    newContainer.appendChild(nameSpan);
+    newContainer.appendChild(pencil);
+    inp.replaceWith(newContainer);
+  }
+  inp.addEventListener('keydown', e => {
+    if(e.key === 'Enter') { e.preventDefault(); commit(); }
+    else if(e.key === 'Escape') { e.preventDefault(); restore(); }
+  });
+  inp.addEventListener('blur', commit);
 }
 
 function renderPaidByBtns() {
@@ -1352,8 +1459,9 @@ function simplifyDebts(balances) {
 }
 
 function renderSettleStep(balances) {
-  document.getElementById('settle-tab-name').textContent = state.tabName || 'Your Tab';
-  const step2name = document.getElementById('step2-tab-name');
+  const settleNameEl = document.getElementById('settle-tab-name-text');
+  if(settleNameEl) settleNameEl.textContent = state.tabName || 'Your Tab';
+  const step2name = document.getElementById('step2-tab-name-text');
   if(step2name) step2name.textContent = state.tabName || 'Your Tab';
   document.getElementById('confetti').innerHTML = ['🎉','✨','🙌','💸','🤝'].map(e=>`<span>${e}</span>`).join('');
   const total = state.expenses.reduce((s,e) => s+e.amount, 0);
@@ -1492,7 +1600,7 @@ function renderPaymentsList(payments) {
         <div class="payment-amount">${fmt(pay.amount)}</div>
         <div class="done-chip${marked?' marked':''}" id="done-${i}"
           onclick="markDone(this, ${JSON.stringify(pay).replace(/"/g,'&quot;')})">
-          ${marked ? '✓ Paid' : 'Paid ✓'}
+          ${marked ? '✓ Paid' : 'Mark paid'}
         </div>
       </div>
     </div>`;
