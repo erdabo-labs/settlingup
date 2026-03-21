@@ -753,6 +753,24 @@ function splitEvenly(total, n) {
   const remainder = totalCents - base * n;
   return Array.from({length: n}, (_, i) => (base + (i < remainder ? 1 : 0)) / 100);
 }
+
+/**
+ * Return the cent-exact share for `personId` in expense `exp`.
+ * For custom splits reads from splitAmounts. For even splits, uses
+ * the expense ID as a rotation seed so extra cents are distributed
+ * fairly across different expenses rather than always hitting the same people.
+ */
+function computePersonShare(exp, personId) {
+  if(exp.splitAmounts) return exp.splitAmounts[personId] || 0;
+  const idx = exp.splitWith.indexOf(personId);
+  if(idx === -1) return 0;
+  const n = exp.splitWith.length;
+  const totalCents = Math.round(exp.amount * 100);
+  const base = Math.floor(totalCents / n);
+  const remainder = totalCents - base * n;
+  const offset = n > 1 ? Math.abs(Number(exp.id) || 0) % n : 0;
+  return (base + (((idx + offset) % n) < remainder ? 1 : 0)) / 100;
+}
 let _tempIdSeq = -1;
 function nextTempId() { return _tempIdSeq--; }
 
@@ -1158,19 +1176,19 @@ async function addExpense() {
   if(!desc) { showFormError('Give this expense a description.'); highlightField('exp-desc'); return; }
   if(selectedPaidBy === null) { showFormError('Select who paid.'); highlightField('paidby-btns'); return; }
 
-  let amount = 0, splitWith = [], splitAmounts = null;
+  let amount = 0, splitWith = [], splitAmounts = null, expTax = 0, expTip = 0, splitBases = null;
   if(state.currentSplitType === 'even') {
     amount = parseFloat(document.getElementById('exp-amount-top').value);
     if(!amount || !isFinite(amount)) { showFormError('Enter a valid amount.'); highlightField('exp-amount-top'); return; }
     if(amount <= 0) { showFormError('Amount must be a positive number.'); highlightField('exp-amount-top'); return; }
     splitWith = state.people.filter(p => _evenSplitIncluded.has(p.id)).map(p => p.id);
     if(!splitWith.length) { showFormError('Select at least one person to split with.'); return; }
-    splitAmounts = {};
-    const shares = splitEvenly(amount, splitWith.length);
-    splitWith.forEach((id, i) => { splitAmounts[id] = shares[i]; });
+    // Don't store splitAmounts for even splits — computePersonShare() handles
+    // cent-exact math with per-expense rotation so no one person is systematically short-changed
   } else if(state.currentSplitType === 'custom') {
-    const tax = parseFloat(document.getElementById('exp-tax').value) || 0;
-    const tip = parseFloat(document.getElementById('exp-tip').value) || 0;
+    expTax = parseFloat(document.getElementById('exp-tax').value) || 0;
+    expTip = parseFloat(document.getElementById('exp-tip').value) || 0;
+    const tax = expTax, tip = expTip;
     const subs = {}; let sub = 0;
     state.people.forEach(p => { const v = parseFloat(document.getElementById('custom-amt-'+p.id)?.value)||0; subs[p.id]=v; sub+=v; });
     if(sub <= 0) { showFormError("Enter at least one person's amount."); return; }
@@ -1194,8 +1212,11 @@ async function addExpense() {
     }
     // Remove zero/null entries so ghost people don't appear in splitAmounts or splitWith
     Object.keys(splitAmounts).forEach(k => { if(!(splitAmounts[k] > 0)) delete splitAmounts[k]; });
+    Object.keys(subs).forEach(k => { if(!(subs[k] > 0)) delete subs[k]; });
     amount = Math.round(Object.values(splitAmounts).reduce((s,v) => s+v, 0)*100)/100;
     splitWith = Object.keys(splitAmounts).map(Number);
+    // Store base amounts and tax/tip for later editing
+    splitBases = subs;
   } else {
     if(selectedPersonalFor === null) { showFormError('Select who this is for.'); return; }
     amount = parseFloat(document.getElementById('exp-amount-top').value);
@@ -1205,7 +1226,7 @@ async function addExpense() {
 
   if(editingId !== null) {
     const wasId = editingId;
-    const updated = {id: wasId, desc, amount, paidBy: selectedPaidBy, splitType: state.currentSplitType, splitWith, splitAmounts};
+    const updated = {id: wasId, desc, amount, paidBy: selectedPaidBy, splitType: state.currentSplitType, splitWith, splitAmounts, tax: expTax||null, tip: expTip||null, splitBases: splitBases||null};
     const idx = state.expenses.findIndex(e => e.id === wasId);
     if(idx !== -1) state.expenses[idx] = updated;
     cancelEdit();
@@ -1215,7 +1236,7 @@ async function addExpense() {
     if(db && state.tabId) await reconcileMarkedPayments();
   } else {
     const tempId = nextTempId();
-    const newExp = {id: tempId, desc, amount, paidBy: selectedPaidBy, splitType: state.currentSplitType, splitWith, splitAmounts};
+    const newExp = {id: tempId, desc, amount, paidBy: selectedPaidBy, splitType: state.currentSplitType, splitWith, splitAmounts, tax: expTax||null, tip: expTip||null, splitBases: splitBases||null};
     state.expenses.push(newExp);
     _lastPaidBy = selectedPaidBy;
     _lastSplitType = state.currentSplitType;
@@ -1286,11 +1307,15 @@ function editExpense(id) {
   document.getElementById('exp-amount-top').value = exp.amount.toFixed(2);
   setSplitType(exp.splitType);
   if(exp.splitType === 'custom') {
-    // Restore individual amounts from saved splitAmounts (don't re-split evenly)
+    // Restore base amounts and tax/tip (prefer splitBases, fall back to splitAmounts)
     _customTotalSource = 'bottom';
+    if(exp.tax) { const t = document.getElementById('exp-tax'); if(t) t.value = exp.tax.toFixed(2); }
+    if(exp.tip) { const t = document.getElementById('exp-tip'); if(t) t.value = exp.tip.toFixed(2); }
     state.people.forEach(p => {
       const inp = document.getElementById('custom-amt-'+p.id);
-      if(inp && exp.splitAmounts) inp.value = (exp.splitAmounts[p.id]||0).toFixed(2);
+      if(!inp) return;
+      const bases = exp.splitBases || exp.splitAmounts;
+      inp.value = bases ? (bases[p.id]||0).toFixed(2) : '0.00';
     });
   } else if(exp.splitType === 'personal') {
     selectedPersonalFor = exp.splitWith[0];
@@ -1325,8 +1350,13 @@ function renderExpenseList() {
     const pi = state.people.indexOf(payer);
     const tc = exp.splitType==='even' ? 'tag-even' : exp.splitType==='custom' ? 'tag-custom' : 'tag-personal';
     let sd = '';
-    if(exp.splitType === 'custom' && exp.splitAmounts) {
-      sd = exp.splitWith.map(id => { const p=state.people.find(pp=>pp.id===id); return p?`${pName(p)}: ${fmt(exp.splitAmounts[id]||0)}`:''; }).filter(Boolean).join(' · ');
+    if(exp.splitType === 'custom') {
+      const bases = exp.splitBases || exp.splitAmounts;
+      sd = exp.splitWith.map(id => { const p=state.people.find(pp=>pp.id===id); return p?`${pName(p)}: ${fmt(bases?bases[id]||0:computePersonShare(exp,id))}`:''; }).filter(Boolean).join(' · ');
+      if(exp.tax > 0 || exp.tip > 0) {
+        const extras = [exp.tax > 0 ? `tax ${fmt(exp.tax)}` : '', exp.tip > 0 ? `tip ${fmt(exp.tip)}` : ''].filter(Boolean).join(', ');
+        sd += ` <span style="color:var(--text3);font-size:11px;">(+${extras})</span>`;
+      }
     } else {
       sd = exp.splitWith.map(id => { const p=state.people.find(pp=>pp.id===id); return p?pName(p):''; }).filter(Boolean).join(', ');
     }
@@ -1360,8 +1390,7 @@ function computeDirectPayments(balances) {
   state.people.forEach(p => { debts[p.id] = {}; state.people.forEach(q => { debts[p.id][q.id] = 0; }); });
   state.expenses.forEach(exp => {
     const payer = exp.paidBy;
-    if(exp.splitAmounts) exp.splitWith.forEach(id => { if(id !== payer) debts[id][payer] = Math.round((debts[id][payer]+(exp.splitAmounts[id]||0))*100)/100; });
-    else { const share = exp.amount/exp.splitWith.length; exp.splitWith.forEach(id => { if(id !== payer) debts[id][payer] = Math.round((debts[id][payer]+share)*100)/100; }); }
+    exp.splitWith.forEach(id => { if(id !== payer) debts[id][payer] = Math.round((debts[id][payer]+computePersonShare(exp,id))*100)/100; });
   });
   state.people.forEach(p => state.people.forEach(q => {
     if(p.id >= q.id) return;
@@ -1435,9 +1464,10 @@ function computeBalances() {
   state.people.forEach(p => { balances[p.id] = 0; });
   state.expenses.forEach(exp => {
     balances[exp.paidBy] += exp.amount;
-    if(exp.splitAmounts) exp.splitWith.forEach(id => { balances[id] -= (exp.splitAmounts[id]||0); });
-    else { const share = exp.amount/exp.splitWith.length; exp.splitWith.forEach(id => { balances[id] -= share; }); }
+    exp.splitWith.forEach(id => { balances[id] -= computePersonShare(exp, id); });
   });
+  // Round all balances to nearest cent to eliminate floating-point drift
+  for(const id in balances) balances[id] = Math.round(balances[id] * 100) / 100;
   return balances;
 }
 
@@ -1593,8 +1623,7 @@ function renderSettleStep(balances) {
   state.people.forEach(p => { tp[p.id]=0; to[p.id]=0; });
   state.expenses.forEach(exp => {
     tp[exp.paidBy] += exp.amount;
-    if(exp.splitAmounts) exp.splitWith.forEach(id => { to[id] += (exp.splitAmounts[id]||0); });
-    else { const share = exp.amount/exp.splitWith.length; exp.splitWith.forEach(id => { to[id] += share; }); }
+    exp.splitWith.forEach(id => { to[id] += computePersonShare(exp, id); });
   });
 
   const me = state.people.find(p => isMe(p.id));
@@ -1653,7 +1682,7 @@ function renderSettleStep(balances) {
       `<div class="detail-line"><span class="dl-desc">${escHtml(e.desc)}</span><span class="dl-note">${itsMe?'you paid':'paid'}</span><span class="dl-amount" style="color:var(--accent)">+${fmt(e.amount)}</span></div>`
     ).join('');
     const chargedLines = state.expenses.filter(e => e.splitWith.includes(p.id)).map(e => {
-      const ms = e.splitAmounts ? (e.splitAmounts[p.id]||0) : e.amount/e.splitWith.length;
+      const ms = computePersonShare(e, p.id);
       const payer = state.people.find(pp => pp.id===e.paidBy);
       const note = e.paidBy===p.id ? (itsMe?'you paid':'they paid') : isMe(e.paidBy)?'you paid':`${escHtml(payer?.name||'?')} paid`;
       return `<div class="detail-line"><span class="dl-desc">${escHtml(e.desc)}</span><span class="dl-note">${note}</span><span class="dl-amount" style="color:var(--red)">-${fmt(ms)}</span></div>`;
@@ -1839,6 +1868,12 @@ function makeShortCode() {
 }
 
 function expenseToRow(e, tabId, includeId = true) {
+  // Embed tax/tip/splitBases as _meta inside split_amounts so we don't need extra DB columns
+  let splitAmounts = e.splitAmounts ? {...e.splitAmounts} : null;
+  if(e.tax || e.tip || e.splitBases) {
+    if(!splitAmounts) splitAmounts = {};
+    splitAmounts._meta = {tax: e.tax||0, tip: e.tip||0, splitBases: e.splitBases||null};
+  }
   const row = {
     tab_id: tabId,
     description: e.desc,
@@ -1846,13 +1881,21 @@ function expenseToRow(e, tabId, includeId = true) {
     paid_by: e.paidBy,
     split_type: e.splitType,
     split_with: Array.isArray(e.splitWith) ? e.splitWith : [],
-    split_amounts: e.splitAmounts ? e.splitAmounts : null
+    split_amounts: splitAmounts
   };
   if(includeId && typeof e.id === 'number' && e.id > 0) row.id = e.id;
   return row;
 }
 
 function rowToExpense(r) {
+  let rawAmounts = r.split_amounts || null;
+  let tax = null, tip = null, splitBases = null;
+  if(rawAmounts && rawAmounts._meta) {
+    const meta = rawAmounts._meta;
+    tax = meta.tax || null; tip = meta.tip || null; splitBases = meta.splitBases || null;
+    rawAmounts = Object.fromEntries(Object.entries(rawAmounts).filter(([k]) => k !== '_meta'));
+    if(!Object.keys(rawAmounts).length) rawAmounts = null;
+  }
   return {
     id: r.id,
     desc: r.description,
@@ -1860,7 +1903,8 @@ function rowToExpense(r) {
     paidBy: r.paid_by,
     splitType: r.split_type,
     splitWith: r.split_with,
-    splitAmounts: r.split_amounts || null
+    splitAmounts: rawAmounts,
+    tax, tip, splitBases
   };
 }
 
@@ -2099,14 +2143,8 @@ async function updateExpenseInSupabase(exp) {
   if(!db || !state.tabId) return;
   if(exp.id < 0) return;
   await setOwnerToken();
-  const row = {
-    description: exp.desc,
-    amount: exp.amount,
-    paid_by: exp.paidBy,
-    split_type: exp.splitType,
-    split_with: exp.splitWith,
-    split_amounts: exp.splitAmounts || null
-  };
+  const row = expenseToRow(exp, state.tabId, false);
+  delete row.tab_id;
   const {error} = await db.from('expenses').update(row).eq('tab_id', state.tabId).eq('id', exp.id);
   if(error) {
     console.warn('updateExpense error:', error.code, error.message);
