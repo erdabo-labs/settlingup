@@ -160,6 +160,14 @@ body {
 .section-title { font-family:'Outfit',sans-serif;font-size:24px;font-weight:700;margin-bottom:4px;letter-spacing:-0.3px; }
 .section-sub { color:var(--text2);font-size:14px;margin-bottom:20px; }
 
+/* ── FIRST-TIME HERO ── */
+.hero-tagline { text-align:center;padding:28px 0 24px;animation:fadeUp 0.4s ease both; }
+.hero-tagline-title { font-family:'Outfit',sans-serif;font-size:28px;font-weight:800;letter-spacing:-0.5px;line-height:1.15;margin-bottom:8px;color:var(--text); }
+.hero-tagline-title span { color:var(--accent); }
+.hero-tagline-sub { font-size:14px;color:var(--text2);line-height:1.5; }
+.hero-tagline-pills { display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:14px; }
+.hero-pill { font-size:12px;padding:5px 12px;border-radius:99px;border:1px solid var(--border);background:var(--surface);color:var(--text2);font-weight:500; }
+
 /* GLASS CARD */
 .card { background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:12px;position:relative;overflow:hidden;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px); }
 .card::before { content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--shimmer),transparent); }
@@ -503,32 +511,38 @@ select option { background:var(--bg2);color:var(--text); }
 
   <!-- STEP 0 -->
   <div class="step active" id="step-0">
-    <div class="section-title">Name your tab</div>
-    <div class="section-sub">What's the occasion?</div>
+    <!-- Hero tagline — shown only for first-time visitors, hidden via JS for returning users -->
+    <div class="hero-tagline" id="hero-tagline">
+      <div class="hero-tagline-title">Split expenses.<br><span>Settle up fairly.</span></div>
+      <div class="hero-tagline-sub">No sign-up. No app. Just share a link.</div>
+      <div class="hero-tagline-pills">
+        <span class="hero-pill">✈️ Trips</span>
+        <span class="hero-pill">🍕 Dinners</span>
+        <span class="hero-pill">🏠 Bills</span>
+        <span class="hero-pill">🎉 Events</span>
+      </div>
+    </div>
+
+    <div class="section-title" id="home-section-title" style="display:none;">Name your tab</div>
+    <div class="section-sub" id="home-section-sub" style="display:none;">What's the occasion?</div>
     <div class="card">
       <div class="form-label">Tab name</div>
-      <input class="input-big" id="tab-name" type="text" placeholder="Summer Trip 2026" maxlength="60" autocomplete="off">
+      <input class="input-big" id="tab-name" type="text" placeholder="Summer Trip 2026" maxlength="60" autocomplete="off"
+        onkeydown="if(event.key==='Enter') goStep(1)">
     </div>
     <div class="btn-row">
       <button class="btn btn-primary btn-full" onclick="goStep(1)">Add people →</button>
     </div>
-    <!-- recent tabs + find a tab -->
+
+    <!-- recent tabs — shown for returning users -->
     <div class="recent-tabs-section" id="recent-tabs-section">
       <div id="recent-list-wrap" style="display:none;">
         <div class="recent-tabs-label">Recent tabs</div>
         <div class="recent-tab-list" id="recent-tab-list"></div>
       </div>
-      <div style="margin-top:14px;">
-        <div class="recent-tabs-label">Open a tab by code</div>
-        <div class="find-tab-row">
-          <input id="find-tab-input" type="text" placeholder="e.g. aB3xQz" maxlength="12" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-            onkeydown="if(event.key==='Enter') openTabByCode()" oninput="clearFindTabError()">
-          <button class="find-tab-btn" onclick="openTabByCode()">Open →</button>
-        </div>
-        <div id="find-tab-error" style="font-size:12px;color:var(--red);margin-top:6px;display:none;"></div>
-      </div>
     </div>
-    <!-- demo cards — collapsible, default collapsed -->
+
+    <!-- demo cards — auto-expanded for first-timers, collapsed for returning users -->
     <div class="demo-cards-section" id="demo-cards-section" style="display:none;">
       <div class="demo-cards-toggle" onclick="toggleDemoCards()">
         <span class="demo-cards-toggle-label">Try a demo</span>
@@ -537,6 +551,17 @@ select option { background:var(--bg2);color:var(--text); }
       <div class="demo-cards-list-wrap">
         <div class="demo-card-list" id="demo-card-list"></div>
       </div>
+    </div>
+
+    <!-- find a tab by code -->
+    <div style="margin-top:16px;" id="find-tab-section">
+      <div class="recent-tabs-label">Open a tab by code</div>
+      <div class="find-tab-row">
+        <input id="find-tab-input" type="text" placeholder="e.g. aB3xQz" maxlength="12" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+          onkeydown="if(event.key==='Enter') openTabByCode()" oninput="clearFindTabError()">
+        <button class="find-tab-btn" onclick="openTabByCode()">Open →</button>
+      </div>
+      <div id="find-tab-error" style="font-size:12px;color:var(--red);margin-top:6px;display:none;"></div>
     </div>
   </div>
 
@@ -2307,6 +2332,16 @@ function renderRecentTabs() {
   const tabs = loadRecentTabs();
   const wrap = document.getElementById('recent-list-wrap');
   const list = document.getElementById('recent-tab-list');
+  const isFirstTime = tabs.length === 0;
+
+  // Hero tagline: show for first-timers, hide for returning users
+  const hero = document.getElementById('hero-tagline');
+  const homeTitle = document.getElementById('home-section-title');
+  const homeSub = document.getElementById('home-section-sub');
+  if(hero) hero.style.display = isFirstTime ? '' : 'none';
+  if(homeTitle) homeTitle.style.display = isFirstTime ? 'none' : '';
+  if(homeSub) homeSub.style.display = isFirstTime ? 'none' : '';
+
   if(!tabs.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
   list.innerHTML = tabs.map(t => {
@@ -2527,7 +2562,11 @@ function renderDemoCards() {
   const list = document.getElementById('demo-card-list');
   if(!demos || !demos.length) { if(section) section.style.display = 'none'; return; }
   if(section) section.style.display = '';
-  // Default collapsed — do not add 'open' class here
+
+  // Auto-expand for first-time visitors, collapsed for returning users
+  const isFirstTime = loadRecentTabs().length === 0;
+  if(isFirstTime && section) section.classList.add('open');
+
   list.innerHTML = demos.map((d, i) =>
     `<div class="demo-card" onclick="loadDemo(${i})">
       <div class="demo-card-icon" style="background:${d.color||'var(--accent-bg)'};">${d.icon||'🧾'}</div>
