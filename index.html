@@ -64,7 +64,7 @@
   --surface:    rgba(255,255,255,0.80);
   --surface2:   rgba(255,255,255,0.95);
   --surfaceHov: rgba(255,255,255,1);
-  --border:     rgba(20,50,140,0.10);
+  --border:     rgba(20,50,140,0.18);
   --border2:    rgba(20,50,140,0.22);
   --text:       #0d1a33;
   --text2:      rgba(13,26,51,0.58);
@@ -239,14 +239,13 @@ select option { background:var(--bg2);color:var(--text); }
 
 /* TAB NAMEPLATE (step 2) */
 .tab-nameplate { margin-bottom:20px; }
-.tab-nameplate-name { font-family:'Outfit',sans-serif;font-size:26px;font-weight:800;letter-spacing:-0.4px;line-height:1.1;color:var(--text);margin-bottom:2px; }
+.tab-nameplate-name { font-family:'Outfit',sans-serif;font-size:26px;font-weight:800;letter-spacing:-0.4px;line-height:1.1;color:var(--text);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;display:block; }
 .tab-nameplate-label { font-size:13px;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;font-weight:600; }
 
 /* EDITABLE TITLE */
-.editable-title { cursor:text;display:inline-flex;align-items:center;gap:6px; }
-.editable-title .edit-pencil { opacity:0;font-size:0.7em;cursor:pointer;transition:opacity 0.15s; }
-.editable-title:hover .edit-pencil { opacity:1; }
-.editable-title-input { font-family:inherit;font-size:inherit;font-weight:inherit;letter-spacing:inherit;line-height:inherit;color:inherit;background:transparent;border:none;border-bottom:2px solid var(--accent);outline:none;padding:0;min-width:60px;width:auto; }
+.editable-title { cursor:pointer;position:relative;display:inline-block; }
+.editable-title:hover::after { content:' ✏️';font-size:0.6em;opacity:0.5;vertical-align:middle; }
+.editable-title-input { background:transparent;border:none;border-bottom:2px solid var(--accent);color:inherit;font:inherit;letter-spacing:inherit;outline:none;width:100%;padding:0; }
 
 /* SETTLE HERO */
 .settle-hero { text-align:center;padding:20px 0 18px; }
@@ -306,7 +305,7 @@ select option { background:var(--bg2);color:var(--text); }
 .mode-hint.recommended { border-left-color:var(--green); }
 .mode-hint.direct { border-left-color:#e07a3a; }
 .mode-hint-text { flex:1;font-style:italic; }
-.strategy-info-btn { width:18px;height:18px;border-radius:50%;border:1.5px solid var(--border2);background:transparent;color:var(--text3);font-size:11px;font-weight:700;cursor:pointer;display:grid;place-items:center;flex-shrink:0;line-height:1;-webkit-tap-highlight-color:transparent;transition:all 0.15s;font-family:'Outfit',sans-serif; }
+.strategy-info-btn { width:28px;height:28px;border-radius:50%;border:1.5px solid var(--border2);background:transparent;color:var(--text3);font-size:12px;font-weight:700;cursor:pointer;display:grid;place-items:center;flex-shrink:0;line-height:1;-webkit-tap-highlight-color:transparent;transition:all 0.15s;font-family:'Outfit',sans-serif; }
 .strategy-info-btn:hover { border-color:var(--accent);color:var(--accent); }
 .strategy-popover-wrap { position:relative;display:inline-flex; }
 .strategy-popover { display:none;position:absolute;top:calc(100% + 10px);right:0;width:280px;background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:14px 16px;font-size:13px;color:var(--text);line-height:1.55;box-shadow:0 8px 32px rgba(0,0,0,0.28);z-index:200;font-style:normal; }
@@ -561,7 +560,7 @@ select option { background:var(--bg2);color:var(--text); }
   <!-- STEP 2 -->
   <div class="step" id="step-2">
     <div class="tab-nameplate" id="step2-nameplate">
-      <div class="tab-nameplate-name" id="step2-tab-name"><span class="editable-title" onclick="startTabNameEdit('step2')"><span id="step2-tab-name-text"></span><span class="edit-pencil" title="Rename tab">✏️</span></span></div>
+      <div class="tab-nameplate-name editable-title" id="step2-tab-name" onclick="startRenameTab('step2-tab-name')" title="Click to rename"></div>
       <div class="tab-nameplate-label">Add expenses</div>
     </div>
     <div id="demo-banner-2" style="display:none;" class="demo-banner">
@@ -629,8 +628,8 @@ select option { background:var(--bg2);color:var(--text); }
   <div class="step" id="step-3">
     <div class="settle-hero">
       <div class="confetti-wrap" id="confetti">🎉</div>
-      <div class="settle-hero-tab-name" id="settle-tab-name"><span class="editable-title" onclick="startTabNameEdit('settle')"><span id="settle-tab-name-text"></span><span class="edit-pencil" title="Rename tab">✏️</span></span></div>
-      <div class="settle-hero-title">Here's how we're <span>settling up</span></div>
+      <div class="settle-hero-tab-name editable-title" id="settle-tab-name" onclick="startRenameTab('settle-tab-name')" title="Click to rename"></div>
+      <div class="settle-hero-title">tap any payment to mark it done</div>
     </div>
     <div class="summary-bar" id="summary-bar"></div>
     <div id="validation-banner"></div>
@@ -718,6 +717,8 @@ let personIdSeq = 0;
 let paymentMode = 'simplified';
 let _simplifiedPayments = [], _directPayments = [];
 let editingId = null;
+let _lastPaidBy = null;
+let _lastSplitType = 'even';
 let db = null;
 let realtimeChannel = null;
 const _pendingLocalIds = new Set();
@@ -780,6 +781,7 @@ function startOver() {
   state = {tabName:'', people:[], expenses:[], currentSplitType:'even', tabId:null, shortCode:null, myPersonId:null};
   personIdSeq = 0; _tempIdSeq = -1;
   _markedPayments = [];
+  _lastPaidBy = null; _lastSplitType = 'even';
   document.getElementById('tab-name').value = '';
   document.getElementById('people-list').innerHTML = '';
   document.getElementById('conn-dot').style.display = 'none';
@@ -832,13 +834,13 @@ function renderPeopleList() {
     `<div class="person-chip" id="person-chip-${p.id}">
       <div class="person-avatar ${avatarClass(i)}">${initials(p.name)}</div>
       <div class="person-name">${pName(p)}</div>
-      <button class="btn-edit" onclick="startPersonRename(${p.id})" title="Rename">✏️</button>
+      <button class="btn-edit" onclick="startRenamePerson(${p.id})" title="Rename">✏️</button>
       <button class="btn btn-danger" onclick="removePerson(${p.id})">✕</button>
     </div>`
   ).join('');
 }
 
-function startPersonRename(id) {
+function startRenamePerson(id) {
   const p = state.people.find(pp => pp.id === id);
   if(!p) return;
   const chip = document.getElementById('person-chip-' + id);
@@ -884,68 +886,41 @@ let selectedPaidBy = null, selectedPersonalFor = null;
 
 function renderExpenseStep() {
   selectedPaidBy = null; selectedPersonalFor = null;
-  const nameEl = document.getElementById('step2-tab-name-text');
-  if(nameEl) nameEl.textContent = state.tabName || 'Your Tab';
+  const nameEl = document.getElementById('step2-tab-name');
+  if(nameEl && !nameEl.querySelector('input')) nameEl.textContent = state.tabName || 'Your Tab';
   renderPaidByBtns(); renderPersonalForBtns(); renderCustomAmountRows();
   setSplitType('even'); renderExpenseList();
 }
 
-function startTabNameEdit(which) {
-  // which: 'step2' or 'settle'
-  const textSpanId = which === 'step2' ? 'step2-tab-name-text' : 'settle-tab-name-text';
-  const textSpan = document.getElementById(textSpanId);
-  if(!textSpan) return;
-  const container = textSpan.closest('.editable-title');
-  if(!container) return;
-  // prevent double-editing
-  if(container.querySelector('.editable-title-input')) return;
+function startRenameTab(elId) {
+  const el = document.getElementById(elId);
+  if(!el || el.querySelector('input')) return;
   const prev = state.tabName || 'Your Tab';
   const inp = document.createElement('input');
-  inp.type = 'text';
-  inp.value = prev;
   inp.className = 'editable-title-input';
-  inp.style.width = Math.max(80, prev.length * 14) + 'px';
-  container.replaceWith(inp);
+  inp.value = prev;
+  inp.maxLength = 60;
+  el.textContent = '';
+  el.appendChild(inp);
   inp.focus();
   inp.select();
-  function commit() {
+  const finish = async (save) => {
     const val = inp.value.trim();
-    if(!val) { restore(); return; }
-    state.tabName = val;
-    document.getElementById('tab-name').value = val;
-    // update both text spans
-    const s2 = document.getElementById('step2-tab-name-text');
-    if(s2) s2.textContent = val;
-    const st = document.getElementById('settle-tab-name-text');
-    if(st) st.textContent = val;
-    if(db && state.tabId) syncTabMeta();
-    restoreContainer();
-  }
-  function restore() {
-    inp.value = prev;
-    restoreContainer();
-  }
-  function restoreContainer() {
-    // rebuild the editable-title span in place
-    const newContainer = document.createElement('span');
-    newContainer.className = 'editable-title';
-    newContainer.onclick = () => startTabNameEdit(which);
-    const nameSpan = document.createElement('span');
-    nameSpan.id = textSpanId;
-    nameSpan.textContent = state.tabName || 'Your Tab';
-    const pencil = document.createElement('span');
-    pencil.className = 'edit-pencil';
-    pencil.title = 'Rename tab';
-    pencil.textContent = '✏️';
-    newContainer.appendChild(nameSpan);
-    newContainer.appendChild(pencil);
-    inp.replaceWith(newContainer);
-  }
+    el.textContent = save && val ? val : prev;
+    if(save && val && val !== prev) {
+      state.tabName = val;
+      document.getElementById('tab-name').value = val;
+      const otherId = elId === 'step2-tab-name' ? 'settle-tab-name' : 'step2-tab-name';
+      const other = document.getElementById(otherId);
+      if(other && !other.querySelector('input')) other.textContent = val;
+      if(db && state.tabId) await syncTabMeta();
+    }
+  };
+  inp.addEventListener('blur', () => finish(true));
   inp.addEventListener('keydown', e => {
-    if(e.key === 'Enter') { e.preventDefault(); commit(); }
-    else if(e.key === 'Escape') { e.preventDefault(); restore(); }
+    if(e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+    if(e.key === 'Escape') { inp.value = prev; inp.blur(); }
   });
-  inp.addEventListener('blur', commit);
 }
 
 function renderPaidByBtns() {
@@ -1007,9 +982,25 @@ function toggleCustomInclude(id) {
 }
 
 function splitEvenlyCustom() {
-  // Always reads from the top amount field
-  const total = parseFloat(document.getElementById('exp-amount-top')?.value) || 0;
-  if(!total || total <= 0) return;
+  // Reads from the top amount field; if empty, falls back to sum of per-person amounts
+  let total = parseFloat(document.getElementById('exp-amount-top')?.value) || 0;
+  if(!total || total <= 0) {
+    const includedSum = state.people.reduce((s,p) => {
+      const row = document.getElementById('crow-'+p.id);
+      if(!row || !row.classList.contains('included')) return s;
+      return s + (parseFloat(document.getElementById('custom-amt-'+p.id)?.value)||0);
+    }, 0);
+    if(!includedSum || includedSum <= 0) {
+      const btn = document.querySelector('.btn-split-even');
+      if(btn) {
+        const prev = btn.style.color;
+        btn.style.color = 'var(--red)';
+        setTimeout(() => { btn.style.color = prev; }, 1500);
+      }
+      return;
+    }
+    total = includedSum;
+  }
   _customTotalSource = 'top';
   const tax = parseFloat(document.getElementById('exp-tax')?.value) || 0;
   const tip = parseFloat(document.getElementById('exp-tip')?.value) || 0;
@@ -1098,8 +1089,10 @@ async function addExpense() {
     if(sub <= 0) { alert("Enter at least one person's amount."); return; }
     splitAmounts = {};
     state.people.forEach(p => { const base=subs[p.id]; splitAmounts[p.id]=Math.round((base+(base/sub)*(tax+tip))*100)/100; });
+    // Remove zero/null entries so ghost people don't appear in splitAmounts or splitWith
+    Object.keys(splitAmounts).forEach(k => { if(!(splitAmounts[k] > 0)) delete splitAmounts[k]; });
     amount = Math.round(Object.values(splitAmounts).reduce((s,v) => s+v, 0)*100)/100;
-    splitWith = state.people.filter(p => (splitAmounts[p.id]||0) > 0).map(p => p.id);
+    splitWith = Object.keys(splitAmounts).map(Number);
   } else {
     if(selectedPersonalFor === null) { alert('Select who this is for.'); return; }
     amount = parseFloat(document.getElementById('exp-amount-top').value);
@@ -1121,6 +1114,8 @@ async function addExpense() {
     const tempId = nextTempId();
     const newExp = {id: tempId, desc, amount, paidBy: selectedPaidBy, splitType: state.currentSplitType, splitWith, splitAmounts};
     state.expenses.push(newExp);
+    _lastPaidBy = selectedPaidBy;
+    _lastSplitType = state.currentSplitType;
     clearExpenseForm();
     renderExpenseList();
 
@@ -1147,10 +1142,16 @@ function clearExpenseForm() {
   selectedPaidBy = null; selectedPersonalFor = null;
   document.querySelectorAll('#paidby-btns .person-btn').forEach(b => b.classList.remove('selected-payer'));
   document.querySelectorAll('#personalfor-btns .person-btn').forEach(b => b.classList.remove('selected-for'));
-  setSplitType('even'); renderCustomAmountRows();
+  setSplitType(_lastSplitType); renderCustomAmountRows();
+  if(_lastPaidBy !== null && state.people.find(p => p.id === _lastPaidBy)) {
+    selectPaidBy(_lastPaidBy);
+  }
 }
 
 async function removeExpense(id) {
+  const exp = state.expenses.find(e => e.id === id);
+  if(!exp) return;
+  if(!confirm(`Remove "${exp.desc}"? This can't be undone.`)) return;
   state.expenses = state.expenses.filter(e => e.id !== id);
   if(editingId === id) cancelEdit();
   renderExpenseList();
@@ -1347,8 +1348,6 @@ function setPaymentMode(mode) {
     hint.querySelector('.mode-hint-text').innerHTML = `<strong>Direct</strong> — each pair settles their own net balance. <em style="color:var(--text3)">(${payments.length} payment${payments.length!==1?'s':''})</em>`;
   }
   document.getElementById('payment-count').textContent = payments.length;
-  const summaryPayEl = document.getElementById('summary-payments-val');
-  if(summaryPayEl) summaryPayEl.textContent = payments.length;
   renderPaymentsList(payments);
   state.people.forEach(p => updateCardDetailPayments(p.id, payments, mode));
 }
@@ -1461,10 +1460,10 @@ function simplifyDebts(balances) {
 }
 
 function renderSettleStep(balances) {
-  const settleNameEl = document.getElementById('settle-tab-name-text');
-  if(settleNameEl) settleNameEl.textContent = state.tabName || 'Your Tab';
-  const step2name = document.getElementById('step2-tab-name-text');
-  if(step2name) step2name.textContent = state.tabName || 'Your Tab';
+  const settleNameEl = document.getElementById('settle-tab-name');
+  if(settleNameEl && !settleNameEl.querySelector('input')) settleNameEl.textContent = state.tabName || 'Your Tab';
+  const step2name = document.getElementById('step2-tab-name');
+  if(step2name && !step2name.querySelector('input')) step2name.textContent = state.tabName || 'Your Tab';
   document.getElementById('confetti').innerHTML = ['🎉','✨','🙌','💸','🤝'].map(e=>`<span>${e}</span>`).join('');
   const total = state.expenses.reduce((s,e) => s+e.amount, 0);
 
@@ -1480,7 +1479,7 @@ function renderSettleStep(balances) {
   document.getElementById('summary-bar').innerHTML = `
     <div class="summary-stat"><div class="val">$${total.toFixed(2)}</div><div class="lbl">Total</div></div>
     <div class="summary-stat"><div class="val">${state.expenses.length}</div><div class="lbl">Expenses</div></div>
-    <div class="summary-stat"><div class="val" id="summary-payments-val" style="color:var(--accent)">${_simplifiedPayments.length}</div><div class="lbl">Payments</div></div>`;
+    <div class="summary-stat"><div class="val" style="color:var(--accent)">${state.people.length}</div><div class="lbl">People</div></div>`;
   document.getElementById('validation-banner').style.display = 'none';
 
   const tp = {}, to = {};
@@ -1494,7 +1493,7 @@ function renderSettleStep(balances) {
   const me = state.people.find(p => isMe(p.id));
   const orderedPeople = me ? [me, ...state.people.filter(p => !isMe(p.id))] : state.people;
 
-  document.getElementById('person-cards').innerHTML = orderedPeople.map(p => {
+  const _personCardsHtml = orderedPeople.map(p => {
     const i = state.people.indexOf(p);
     const itsMe = isMe(p.id);
     const paid = tp[p.id]||0, owed = to[p.id]||0;
@@ -1573,6 +1572,9 @@ function renderSettleStep(balances) {
       </div>
     </div>`;
   }).join('');
+  document.getElementById('person-cards').innerHTML = _personCardsHtml;
+  const meCard = document.getElementById('pcard-' + state.myPersonId);
+  if(meCard) meCard.classList.add('expanded');
 }
 
 function renderPaymentsList(payments) {
@@ -1618,6 +1620,7 @@ function isMe(pid) { return state.myPersonId !== null && pid === state.myPersonI
 function pName(p) { return isMe(p.id) ? 'You' : escHtml(p.name); }
 
 function _navigateAfterIdentity() {
+  if(state.expenses.length === 0) { goStep(2); return; }
   const urlParams = new URLSearchParams(window.location.search);
   if(urlParams.get('p') === 'e') goStep(2);
   else goSettle();
@@ -1710,9 +1713,9 @@ function setMyIdentity(id) {
 function updateIdentityChip() {
   const chip = document.getElementById('identity-chip');
   const p = state.people.find(pp => pp.id === state.myPersonId);
-  if(!p) { chip.style.display='none'; return; }
+  if(!state.people.length) { chip.style.display='none'; return; }
   chip.style.display = '';
-  document.getElementById('identity-name').textContent = p.name;
+  document.getElementById('identity-name').textContent = p ? p.name : 'Who are you?';
 }
 
 // ─── SUPABASE ────────────────────────────────────────────
@@ -1934,6 +1937,7 @@ function subscribeToTab(tabId) {
         if(document.getElementById('step-2').classList.contains('active')) {
           renderPaidByBtns(); renderPersonalForBtns(); renderCustomAmountRows();
         }
+        if(document.getElementById('step-3').classList.contains('active')) refreshSettlePage();
       })
     // ── NEW: realtime for payments table ──
     .on('postgres_changes',
