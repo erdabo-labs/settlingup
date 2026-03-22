@@ -16,52 +16,11 @@
 
 ---
 
-## 🔴 P1 — Do These First
-
-All P1 items are complete. ✅
+## All P1 + P2 complete ✅
 
 ---
 
-## 🟡 P2 — High Value, Ship Soon
-
-### [ ] Replace alert() with inline form errors
-**Size:** M
-**Why:** alert() is jarring on mobile. Every validation failure pops a native dialog.
-**What to do:**
-- Add `div#expense-form-error` below the "+ Add expense" button, hidden by default
-- Style: `font-size:12px; color:var(--red); margin-top:8px; text-align:center;`
-- Replace all `alert()` in `addExpense()` with `showFormError('message')`
-- Flash red border on the specific missing field
-- Auto-clear after 4 seconds or on next interaction
-
-### [ ] Home screen value prop for first-time visitors
-**Size:** S
-**Why:** First-time visitors see "Name your tab / What's the occasion?" with zero context.
-**What to do:**
-- Add above `.section-title` on step 0, only when `su-recent-tabs` is empty in
-  localStorage:
-  ```html
-  <div class="hero-tagline">
-    Split any expense. Settle up fairly.<br>
-    <span>No sign-up. No app. Just share a link.</span>
-  </div>
-  ```
-- Style: centered, large-ish font, muted subtext, fades in with the step animation
-- Hide it once the user has any recent tabs (returning users don't need it)
-
-### [ ] Sub-dollar balance treatment
-**Size:** S
-**Why:** "Chris owes $0.82" creates real-world awkwardness. Tiny residuals should be
-visually softened.
-**What to do:**
-- In person card rendering: if `Math.abs(bal) < 1.00` and `bal !== 0`, add class
-  `is-micro` to the card
-- `.person-card.is-micro { opacity: 0.65; }`
-- Change verdict text to "basically settled ($0.82)" in muted color
-
----
-
-## 🟢 P3 — Good Features, Schedule When P1+P2 Done
+## 🟢 P3 — Good Features, Schedule When Ready
 
 ### [ ] Venmo / Cash App deep links on payment cards
 **Size:** M
@@ -158,9 +117,7 @@ Cache current tab's data. Works offline.
 
 ---
 
-## Analytics Queries to Run Weekly
-
-The agent should run these against Supabase and include results in the weekly brief:
+## Analytics Queries (run weekly)
 
 ```sql
 -- New tabs this week
@@ -185,63 +142,57 @@ SELECT AVG(exp_count) FROM (
 SELECT split_type, COUNT(*) as n FROM expenses
 GROUP BY split_type ORDER BY n DESC;
 
--- Tabs by people count (from jsonb array length)
-SELECT jsonb_array_length(people) as people_count, COUNT(*) as tabs
-FROM tabs GROUP BY people_count ORDER BY people_count;
+-- Feedback this week
+SELECT rating, COUNT(*) as n FROM feedback
+WHERE created_at > NOW() - INTERVAL '7 days'
+GROUP BY rating ORDER BY rating DESC;
 ```
-
----
-
-## How to Update This File
-
-When completing an item:
-1. Change `[ ]` to `[x]`
-2. Add the PR number or commit hash as a note
-3. Move it to a `## Done` section at the bottom (keep last 10, archive the rest)
-
-When adding a new item from analytics or user feedback:
-1. Add it in the right priority tier with full context
-2. Flag it in the weekly brief to the owner
-3. Don't start it until the owner acknowledges
-
-When re-prioritizing:
-1. Move items between tiers
-2. Note the reason for the change
-3. Message the owner with the proposed re-prioritization before acting on it
 
 ---
 
 ## ✅ Done
 
+### [x] Replace alert() with inline form errors
+**Done:** PR #18 — `showFormError()` + `showToast()` replace all `alert()` calls.
+
+### [x] Home screen value prop for first-time visitors
+**Done:** PR #16 — hero tagline + auto-expanded demos shown to first-time visitors.
+
+### [x] Sub-dollar balance treatment
+**Done:** PRs #15, #18, #20 — `is-micro` class + muted verdict; special-casing removed in #20 to treat all balances equally.
+
+### [x] Thumbs feedback button
+**Done:** PR #17 — 👍/👎 feedback button on steps 2 and 3, writes to `feedback` table.
+
 ### [x] Penny rounding — whole-cent splits everywhere
-**Done:** PRs #11, #12 — `splitEvenly()` helper with integer cent arithmetic + ID-seeded rotation for fair penny distribution across expenses.
+**Done:** PRs #11, #12 — `splitEvenly()` helper with integer cent arithmetic + ID-seeded rotation for fair penny distribution.
 
 ### [x] markDone() uses list index, not stable payment identity
-**Done:** PR #12 — chip id is `done-${pay.from}-${pay.to}`; `markDone()` takes element + pay object; marked state persists across re-renders.
+**Done:** PR #12 — chip id is `done-${pay.from}-${pay.to}`.
 
 ### [x] editExpense() leaves top amount field blank
-**Done:** PR #12 — `editExpense()` sets `exp-amount-top` to `exp.amount.toFixed(2)`; `cancelEdit()` clears it.
+**Done:** PR #12 — `editExpense()` populates `exp-amount-top` correctly.
 
 ### [x] goHome() silently destroys unsaved local-mode data
-**Done:** PR #10 — `goHome()` shows confirm dialog when not on step 0, has unsaved people/expenses, and no tabId.
+**Done:** PR #10 — confirm dialog added.
 
 ### [x] Realtime INSERT race: _pendingLocalIds never checked
 **Done:** PR #10 — INSERT handler returns early if `_pendingLocalIds.size > 0`.
 
 ### [x] Keyboard Enter submits expense form
-**Done:** PR #10 — `onkeydown` Enter handler on `#exp-desc`, `#exp-amount-top`, `#exp-tax`, `#exp-tip`.
+**Done:** PR #10 — `onkeydown` Enter handler on desc/amount/tax/tip fields.
 
 ### [x] "You" card accent border + badge on settle page
-**Done:** PR #10 — `.person-card.you-card { border-color: var(--accent) }` + `.you-badge` span in card header.
+**Done:** PR #10.
 
 ### [x] "New tab" button danger styling
-**Done:** PR #10 — `btn-new-tab` class on button + `.btn-ghost.btn-new-tab:hover { color: var(--red) }` CSS rule.
+**Done:** PR #10.
 
 ### [x] Person removal confirmation shows amounts
-**Done:** PR #10 — affected expenses listed as `• ${e.desc} (${fmt(e.amount)})`.
+**Done:** PR #10.
 
 ### [x] PWA manifest — move from data URI to real file
-**Done:** PR #11 — `/manifest.json` created; `<link rel="manifest">` updated to use file path. Fixes Android "Add to Home Screen".
+**Done:** PR #11 — `/manifest.json` created.
 
-### [x] Check og-image.png exists in repo root
-**Done:** `og-image.png` confirmed present in repo root.
+### [x] og-image.png present in repo root
+**Done:** confirmed present.
