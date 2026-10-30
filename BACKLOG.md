@@ -14,6 +14,14 @@
 - `[?]` — blocked / needs owner decision
 - `[-]` — won't do / deprioritized
 
+## Native iPhone migration — approved October 29, 2026
+
+### [~] Local-first native app with iCloud collaboration
+**Branch:** `feature/native-ios-icloud`
+**Scope:** SwiftUI iPhone app, local Core Data persistence, private/shared CloudKit stores, native invitations, expense splits, settlement ledger, backup/restore, adaptive Duo layouts.
+**Implemented:** Native project and local functionality; iCloud integration code; setup, privacy and store-listing drafts. See `settlingup-ios/README.md`.
+**Release gates:** Register/provision the Apple app and iCloud container, deploy the CloudKit production schema, validate with two iCloud accounts, complete remaining physical-device/accessibility checks, and obtain owner approval before upload. Website/Supabase retirement and old-tab migration are separate decisions.
+
 ---
 
 ## All P1 + P2 complete ✅
