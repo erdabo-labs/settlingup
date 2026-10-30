@@ -20,7 +20,8 @@
 **Branch:** `feature/native-ios-icloud`
 **Scope:** SwiftUI iPhone app, local Core Data persistence, private/shared CloudKit stores, native invitations, expense splits, settlement ledger, backup/restore, adaptive Duo layouts.
 **Implemented:** Native project and local functionality; iCloud integration code; setup, privacy and store-listing drafts. See `settlingup-ios/README.md`.
-**Release gates:** Register/provision the Apple app and iCloud container, deploy the CloudKit production schema, validate with two iCloud accounts, complete remaining physical-device/accessibility checks, and obtain owner approval before upload. Website/Supabase retirement and old-tab migration are separate decisions.
+**October 30 update:** App/container registered, production CloudKit schema deployed, manual distribution signing configured, and owner-authorized 0.1.0 (1) uploaded. Personal internal TestFlight group shows 1 tester, 1 build, Testing. See `settlingup-ios/docs/TESTFLIGHT.md`.
+**Remaining release gates:** Validate with two iCloud accounts and complete physical-device/accessibility checks before broader release. Website/Supabase retirement and old-tab migration are separate decisions.
 
 ---
 

@@ -16,6 +16,15 @@ struct SettlingUpApp: App {
         let local = ProcessInfo.processInfo.arguments.contains("--local-only")
         #endif
         let store = TabStore(cloud: !testing && !preview && !local, inMemory: testing || preview)
+        #if DEBUG
+        let initializeSchema = ProcessInfo.processInfo.arguments.contains("--initialize-cloud-schema")
+        if initializeSchema || ProcessInfo.processInfo.arguments.contains("--print-cloud-schema") {
+            do {
+                try store.container.initializeCloudKitSchema(options: initializeSchema ? [.printSchema] : [.dryRun, .printSchema])
+                print(initializeSchema ? "SettlingUp development CloudKit schema initialized." : "SettlingUp CloudKit schema validation completed (dry run; no records uploaded).")
+            } catch { print("SettlingUp CloudKit schema validation failed: \(error)") }
+        }
+        #endif
         if preview {
             do {
                 let id = try store.create(name: "Mountain weekend", names: ["Erik", "Sam", "Alex"])

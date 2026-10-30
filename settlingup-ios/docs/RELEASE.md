@@ -1,6 +1,8 @@
 # Release preparation
 
-Status: native implementation prepared for local review. **Not uploaded, not signed for distribution, and not yet verified with two iCloud accounts.** Do not shut down the website or Supabase as part of this milestone.
+Status: **0.1.0 (1) is available for internal TestFlight testing as of October 30, 2026.** Apple finished processing it; the Personal group shows **1 Tester · 1 Build**, with the build status **Testing**. The owner account is the sole tester. It is not a public App Store release and two-account collaboration acceptance checks remain outstanding. The App ID and matching CloudKit container are registered and linked; Core Data generated the development schema and it was deployed to Production. Production record types `CD_SUEntry` and `CD_SUTab` were verified in CloudKit Console. Do not repeat these registrations or shut down the website or Supabase as part of this milestone.
+
+App Store Connect listing: **SettlingUp: Shared Tabs**, app ID **6828948001**, bundle ID `com.erdabolabs.SettlingUp`. The shorter listing name was unavailable; the home-screen name remains SettlingUp. [TestFlight](https://appstoreconnect.apple.com/apps/6828948001/testflight).
 
 ## Apple setup
 
@@ -10,6 +12,28 @@ Status: native implementation prepared for local review. **Not uploaded, not sig
 4. Create a development tab, people, all three split modes, tax/tip, and recorded payments, and exercise sharing. Ensure the development CloudKit schema includes every attribute and relationship for `SUTab` and `SUEntry`, plus Core Data's generated record types. If using `initializeCloudKitSchema(options:)` from the debugger or a temporary development tool, run it **only in development**, never in normal production startup.
 5. In CloudKit Console, inspect and deploy the verified **schema** to Production before TestFlight. Development data is not migrated by schema deployment. Do not reset or delete a container to troubleshoot a live app.
 6. Create an App Store Connect record using the chosen bundle ID. Confirm display name availability, distribution region, age rating, privacy answers and support/privacy URLs. Review the bundled privacy manifest against the final binary and current App Store questions.
+
+### Xcode reports that the capability associated with “ICLOUD” could not be determined
+
+This occurred on Xcode 27.1 during automatic development-profile creation. The project showed the iCloud container name, but the App ID and container had not actually been registered in the Apple Developer account. Registering both and linking the container was necessary, but automatic signing still returned the same error. The workaround was to create the development profile in Apple's portal and select it explicitly in Xcode.
+
+Both **Debug** and **Release** now use manual development signing with **SettlingUp Development** for physical-iPhone builds/archives. Distribution export re-signs the archive with the separate **Apple Distribution** identity and **SettlingUp App Store** provisioning profile. The development profile alone is not a TestFlight distribution profile. Existing project and encryption-setting edits made by the owner were retained.
+
+A signed Debug build for `generic/platform=iOS` succeeded on October 30, 2026 using this profile. It was not installed or uploaded during signing verification.
+
+To reproduce on another Mac if needed:
+
+1. In Apple Developer → Certificates, Identifiers & Profiles, verify the explicit App ID `com.erdabolabs.SettlingUp` exists with iCloud/CloudKit and Push Notifications enabled. A matching name displayed locally in Xcode is not proof of registration.
+2. Verify `iCloud.com.erdabolabs.SettlingUp` exists under iCloud Containers and is assigned to that App ID. Apple's container-registration form adds the `iCloud.` prefix automatically; enter `com.erdabolabs.SettlingUp` in its identifier field and verify the final identifier before registering.
+3. Create an **iOS App Development** profile for SettlingUp. Select the existing Apple Development certificate and the intended registered test phone, name it **SettlingUp Development**, generate and download it. Do not revoke working certificates or delete containers to troubleshoot this error.
+4. In Xcode → SettlingUp target → Signing & Capabilities → **Debug**, turn off Automatically manage signing. Open the Provisioning Profile menu → **Import Profile…**, then select the downloaded `.mobileprovision` file. Confirm Xcode displays the expected team and Apple Development certificate without warnings.
+5. Select the registered physical phone and build/run. The development profile does not apply to simulators or authorize App Store distribution. A second physical tester phone must be registered and included in a development profile, or receive an approved TestFlight build.
+
+On October 30 the owner approved creation of the Apple Distribution identity in the Mac Keychain, approved its signing-key use, and accepted Apple's updated agreement. The manually generated App Store profile bypassed the automatic-signing failure. The exported package was signature-verified and checked for Production iCloud, production APNs, the expected container, disabled debugger access, and the non-exempt-encryption declaration before upload. No private key was exported or committed.
+
+For schema setup, Debug builds support `--enable-cloud --initialize-cloud-schema`. Use this only with a development-signed build and a signed-in simulator/device; Apple's initializer creates then removes representative development records. `--print-cloud-schema` performs a dry run instead. Neither schema-initialization path exists in Release builds. An initial server rate-limit response was retried after Apple's requested interval; schema initialization and production deployment then succeeded. Routine app launches do not initialize schema.
+
+Remaining work is installation and real sharing validation, not re-registering the App ID/container or redeploying the same schema.
 
 References: [Apple Core Data sharing](https://developer.apple.com/documentation/coredata/sharing-core-data-objects-between-icloud-users), [CloudKit schema deployment](https://developer.apple.com/documentation/cloudkit/deploying-an-icloud-container-s-schema), [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/).
 

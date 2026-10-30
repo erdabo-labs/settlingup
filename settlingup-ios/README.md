@@ -2,6 +2,8 @@
 
 Native SwiftUI expense splitting with durable on-device storage and optional Apple iCloud collaboration. No Supabase, Vercel, third-party SDK, developer server, advertising, analytics, or payment processing is used by the native target. The existing website and its shared links remain separate and unchanged.
 
+**October 30, 2026:** version **0.1.0 (1)** is available to the owner in the **Personal** internal TestFlight group. Production CloudKit schema deployment and distribution signing are complete. Install through TestFlight with Developer Mode off. See [TestFlight setup and verification](docs/TESTFLIGHT.md); two-account collaboration checks and broader public-release QA remain outstanding.
+
 ## Run
 
 Open `SettlingUp.xcodeproj` and run the **SettlingUp** scheme. Requires Xcode with the iOS 18+ SDK; this checkout was built with Xcode 27.1. The target supports iPhone, including adaptive Duo folded/unfolded layouts. Select your developer team for a physical device.
