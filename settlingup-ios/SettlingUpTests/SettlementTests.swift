@@ -1,5 +1,6 @@
 import XCTest
 import CoreData
+import UIKit
 @testable import SettlingUp
 
 final class SettlementTests: XCTestCase {
@@ -249,5 +250,129 @@ final class PersistenceTests: XCTestCase {
         XCTAssertTrue(store.dataReadable)
         XCTAssertTrue(Settlement.smart(store.tabs[0]).isEmpty)
         try store.tabs[0].validate()
+    }
+}
+
+final class WebParityTests: XCTestCase {
+    func testOriginalWebsiteDemoBalancesMatchToTheCent() throws {
+        // Expected values were evaluated using index.html's computeBalances and
+        // computePersonShare against the unmodified settlingup-demos.js scenarios.
+        let expected = [
+            [118796, -33253, -14503, 41746, 58196, -34404, -27504, -21004, 7496, -7804, -41304, -46458],
+            [334887, -36913, -8138, -35338, -68112, -55612, -59737, -71037],
+            [-6828, 24265, -5148, -680, -105, -11504]
+        ]
+        XCTAssertEqual(DemoScenario.all.count, 3)
+        for (index, demo) in DemoScenario.all.enumerated() {
+            let tab = try demo.snapshot()
+            let balances = Settlement.balances(tab)
+            XCTAssertEqual(tab.people.map { balances[$0.id, default: 0] }, expected[index], demo.title)
+            var settled = tab
+            settled.transfers = Settlement.displayedPayments(tab).map { Transfer(from: $0.from, to: $0.to, cents: $0.cents) }
+            XCTAssertTrue(Settlement.balances(settled).values.allSatisfy { $0 == 0 }, demo.title)
+        }
+    }
+
+    func testEvenRemainderRotatesAcrossExpenses() throws {
+        let ids = (0..<3).map { _ in UUID() }
+        var totals = [UUID: Int]()
+        for offset in 0..<3 {
+            let shares = try Settlement.even(cents: 1000, people: ids, rotation: offset)
+            XCTAssertEqual(shares.values.reduce(0, +), 1000)
+            for (id, cents) in shares { totals[id, default: 0] += cents }
+        }
+        XCTAssertEqual(ids.map { totals[$0] }, [1000, 1000, 1000])
+    }
+
+    func testPaidCardsRemainVisibleInBothStrategies() {
+        let a = Person(name: "Alex"), b = Person(name: "Sam"), c = Person(name: "Jo")
+        var tab = TabSnapshot(name: "Web example", people: [a, b, c], expenses: [
+            Expense(title: "Sam paid for Alex", payer: b.id, cents: 2500, shares: [a.id: 2500], mode: .personal),
+            Expense(title: "Jo paid for Sam", payer: c.id, cents: 2500, shares: [b.id: 2500], mode: .personal)
+        ])
+        let smart = Settlement.displayedPayments(tab)
+        XCTAssertEqual(smart, [.init(from: a.id, to: c.id, cents: 2500)])
+        XCTAssertEqual(Settlement.displayedPayments(tab, direct: true).count, 2)
+        tab.transfers.append(Transfer(from: a.id, to: c.id, cents: 2500))
+        XCTAssertEqual(Settlement.displayedPayments(tab), smart)
+        XCTAssertNotNil(Settlement.markedPayment(smart[0], in: tab))
+        XCTAssertTrue(Settlement.balances(tab).values.allSatisfy { $0 == 0 })
+    }
+
+    func testCustomSplitExclusionAndTaxTip() throws {
+        let a = UUID(), b = UUID()
+        let shares = try Settlement.custom(bases: [a: 2000, b: 1000], tax: 240, tip: 600)
+        XCTAssertEqual(shares, [a: 2560, b: 1280])
+        XCTAssertEqual(shares.values.reduce(0, +), 3840)
+    }
+}
+
+@MainActor
+final class ParityPersistenceTests: XCTestCase {
+    func testPeopleKeepEntryOrderAndRenameWithoutChangingSplits() throws {
+        let store = TabStore(cloud: false, inMemory: true)
+        let id = try store.create(name: "Dinner", names: ["Zoe", "Alex", "Sam"])
+        XCTAssertEqual(store.tabs[0].people.map(\.name), ["Zoe", "Alex", "Sam"])
+        let person = store.tabs[0].people[0]
+        let expense = Expense(title: "Dinner", payer: person.id, cents: 1000, shares: [person.id: 1000], mode: .personal)
+        try store.save(expense, tabID: id)
+        try store.renamePerson(person, name: "Z", tabID: id)
+        XCTAssertEqual(store.tabs[0].people[0].name, "Z")
+        XCTAssertEqual(store.tabs[0].expenses[0], expense)
+        XCTAssertThrowsError(try store.addPerson("alex", tabID: id))
+    }
+
+    func testDirectPaymentMarkAndUndo() throws {
+        let store = TabStore(cloud: false, inMemory: true)
+        let id = try store.create(name: "Trip", names: ["Alex", "Sam", "Jo"])
+        let p = store.tabs[0].people
+        try store.save(Expense(title: "One", payer: p[1].id, cents: 2500, shares: [p[0].id: 2500], mode: .personal), tabID: id)
+        try store.save(Expense(title: "Two", payer: p[2].id, cents: 2500, shares: [p[1].id: 2500], mode: .personal), tabID: id)
+        let payments = Settlement.displayedPayments(store.tabs[0], direct: true)
+        for payment in payments { try store.record(payment, tabID: id) }
+        XCTAssertTrue(Settlement.balances(store.tabs[0]).values.allSatisfy { $0 == 0 })
+        XCTAssertEqual(Settlement.displayedPayments(store.tabs[0], direct: true), payments)
+        try store.undo(store.tabs[0].transfers[0], tabID: id)
+        XCTAssertEqual(store.tabs[0].transfers.count, 1)
+    }
+
+    func testOldPersonPayloadStillDecodes() throws {
+        let id = UUID()
+        let data = Data("{\"id\":\"\(id.uuidString)\",\"name\":\"Original person\"}".utf8)
+        let person = try JSONDecoder().decode(Person.self, from: data)
+        XCTAssertEqual(person.id, id)
+        XCTAssertNil(person.order)
+    }
+
+    func testRefreshImportsBackgroundInsertAndDelete() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = TabStore(directory: directory, cloud: false)
+        let id = try store.create(name: "Before", names: ["Alex", "Sam"])
+        let background = store.container.newBackgroundContext()
+        try background.performAndWait {
+            let tab = try XCTUnwrap(background.fetch(NSFetchRequest<SUTab>(entityName: "SUTab")).first)
+            tab.name = "Imported change"
+            try background.save()
+        }
+        store.refresh()
+        XCTAssertEqual(store.tabs.first?.name, "Imported change")
+        try background.performAndWait {
+            let tab = try XCTUnwrap(background.fetch(NSFetchRequest<SUTab>(entityName: "SUTab")).first)
+            background.delete(tab)
+            try background.save()
+        }
+        store.refresh()
+        XCTAssertFalse(store.tabs.contains { $0.id == id })
+    }
+}
+
+
+@MainActor
+final class BrandingTests: XCTestCase {
+    func testOriginalBrandFontWeightsAreBundledAndRegistered() throws {
+        for name in ["Outfit-Regular", "Outfit-SemiBold", "Outfit-Bold", "Outfit-ExtraBold", "JetBrainsMono-Regular"] {
+            let font = try XCTUnwrap(UIFont(name: name, size: 20), "Missing bundled font: " + name)
+            XCTAssertEqual(font.fontName, name)
+        }
     }
 }

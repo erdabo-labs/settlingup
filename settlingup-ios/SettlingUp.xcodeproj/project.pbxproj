@@ -7,8 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-  A00000000000000000000001 = {isa = PBXBuildFile; fileRef = A00000000000000000000002; };
-  A00000000000000000000003 = {isa = PBXBuildFile; fileRef = A00000000000000000000004; };
 		0000000000000000000000C8 /* SettlingUpApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000064 /* SettlingUpApp.swift */; };
 		0000000000000000000000C9 /* Settlement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000065 /* Settlement.swift */; };
 		0000000000000000000000CA /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000066 /* DesignSystem.swift */; };
@@ -17,6 +15,8 @@
 		0000000000000000000000D2 /* SettlementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000006E /* SettlementTests.swift */; };
 		000000000000000000000141 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000140 /* Assets.xcassets */; };
 		000000000000000000000190 /* TabStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000012C /* TabStore.swift */; };
+		A00000000000000000000001 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000002 /* Fonts */; };
+		A00000000000000000000003 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000004 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -30,8 +30,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-  A00000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = folder; path = Fonts; sourceTree = "<group>"; };
-  A00000000000000000000004 = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		000000000000000000000064 /* SettlingUpApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettlingUpApp.swift; sourceTree = "<group>"; };
 		000000000000000000000065 /* Settlement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settlement.swift; sourceTree = "<group>"; };
 		000000000000000000000066 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
@@ -42,6 +40,8 @@
 		000000000000000000000070 /* SettlingUpTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = SettlingUpTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		00000000000000000000012C /* TabStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabStore.swift; sourceTree = "<group>"; };
 		000000000000000000000140 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A00000000000000000000002 /* Fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Fonts; sourceTree = "<group>"; };
+		A00000000000000000000004 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,8 +81,8 @@
 				000000000000000000000068 /* ExpenseEditor.swift */,
 				00000000000000000000012C /* TabStore.swift */,
 				000000000000000000000140 /* Assets.xcassets */,
- A00000000000000000000002,
- A00000000000000000000004,
+				A00000000000000000000002 /* Fonts */,
+				A00000000000000000000004 /* PrivacyInfo.xcprivacy */,
 			);
 			path = SettlingUpApp;
 			sourceTree = "<group>";
@@ -185,8 +185,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				000000000000000000000141 /* Assets.xcassets in Resources */,
- A00000000000000000000001,
- A00000000000000000000003,
+				A00000000000000000000001 /* Fonts in Resources */,
+				A00000000000000000000003 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -320,16 +320,19 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_OBJC_WEAK = YES;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CODE_SIGN_ENTITLEMENTS = SettlingUpApp/SettlingUp.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = 7NDDZ42CNR;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 7NDDZ42CNR;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SettlingUpApp/Info.plist;
-				CODE_SIGN_ENTITLEMENTS = SettlingUpApp/SettlingUp.entitlements;
 				INFOPLIST_KEY_CFBundleDisplayName = SettlingUp;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -340,6 +343,8 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.erdabolabs.SettlingUp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "SettlingUp Development";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -353,14 +358,17 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_OBJC_WEAK = YES;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CODE_SIGN_ENTITLEMENTS = SettlingUpApp/SettlingUp.entitlements;
+				CODE_SIGN_STYLE = Manual;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "SettlingUp Development";
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 7NDDZ42CNR;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SettlingUpApp/Info.plist;
-				CODE_SIGN_ENTITLEMENTS = SettlingUpApp/SettlingUp.entitlements;
 				INFOPLIST_KEY_CFBundleDisplayName = SettlingUp;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

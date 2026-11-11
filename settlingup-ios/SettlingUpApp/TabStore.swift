@@ -37,16 +37,22 @@ final class TabStore: ObservableObject {
     @Published private(set) var ready = false
     @Published private(set) var dataReadable = true
     @Published private(set) var lastSync: Date?
+    @Published private(set) var lastImport: Date?
+    @Published private(set) var lastExport: Date?
+    @Published private(set) var cloudAccount = "Checking iCloud…"
+    @Published private(set) var syncDetails: [String] = []
     let container: NSPersistentCloudKitContainer
     let cloudEnabled: Bool
     private var privateStore: NSPersistentStore?
     private var sharedStore: NSPersistentStore?
     private var observers: [NSObjectProtocol] = []
     private var objects: [UUID: SUTab] = [:]
+    private var historyTokens: [String: NSPersistentHistoryToken] = [:]
     var context: NSManagedObjectContext { container.viewContext }
 
     init(directory: URL? = nil, cloud: Bool = true, inMemory: Bool = false) {
         cloudEnabled = cloud && !inMemory
+        if !cloudEnabled { cloudAccount = "Local preview — iCloud disabled" }
         container = NSPersistentCloudKitContainer(name: "SettlingUp", managedObjectModel: Self.managedModel)
         do {
             let folder = directory ?? NSPersistentContainer.defaultDirectoryURL().appendingPathComponent("SettlingUp", isDirectory: true)
@@ -65,6 +71,7 @@ final class TabStore: ObservableObject {
                 shared.cloudKitContainerOptions?.databaseScope = .shared
                 container.persistentStoreDescriptions = [local, shared]
             } else { container.persistentStoreDescriptions = [local] }
+            observeChanges()
             var failures: [String] = []
             container.loadPersistentStores { _, error in
                 if let error { failures.append(error.localizedDescription) }
@@ -76,13 +83,41 @@ final class TabStore: ObservableObject {
             // Do not silently overwrite an expense edited on another device while a form is open.
             context.mergePolicy = NSErrorMergePolicy
             ready = true
-            status = cloudEnabled ? "Saved on device · iCloud updates automatically" : "Saved on this device"
+            status = cloudEnabled ? "Saved on device · Waiting for iCloud" : "Saved on this device"
             reload()
-            observeChanges()
+            if cloudEnabled { Task { await checkCloudAccount() } }
         } catch {
             self.error = "Could not open your saved tabs. Your files have been kept. \(error.localizedDescription)"
             status = "Storage unavailable"
         }
+    }
+
+    func checkCloudAccount() async {
+        guard cloudEnabled else { cloudAccount = "Local preview — iCloud disabled"; return }
+        do {
+            switch try await CKContainer(identifier: Self.cloudIdentifier).accountStatus() {
+            case .available: cloudAccount = "iCloud account available"
+            case .noAccount: cloudAccount = "Sign in to iCloud in iPhone Settings"
+            case .restricted: cloudAccount = "iCloud is restricted on this device"
+            case .temporarilyUnavailable: cloudAccount = "iCloud is temporarily unavailable"
+            case .couldNotDetermine: cloudAccount = "Could not check your iCloud account"
+            @unknown default: cloudAccount = "Unknown iCloud account status"
+            }
+        } catch { cloudAccount = "Could not check iCloud: " + Self.describe(error) }
+    }
+
+    private static func describe(_ error: Error, depth: Int = 0) -> String {
+        let value = error as NSError
+        var message = "\(value.domain) (\(value.code)): \(value.localizedDescription)"
+        if let reason = value.localizedFailureReason, !message.contains(reason) { message += " · " + reason }
+        if let recovery = value.localizedRecoverySuggestion { message += " · " + recovery }
+        if depth < 3, let underlying = value.userInfo[NSUnderlyingErrorKey] as? Error {
+            message += " → " + describe(underlying, depth: depth + 1)
+        }
+        if depth < 3, let cloud = error as? CKError, let partial = cloud.partialErrorsByItemID {
+            message += " · " + Set(partial.values.map { describe($0, depth: depth + 1) }).sorted().joined(separator: "; ")
+        }
+        return message
     }
 
     private static func model() -> NSManagedObjectModel {
@@ -115,13 +150,28 @@ final class TabStore: ObservableObject {
                 guard let event = notification.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey] as? NSPersistentCloudKitContainer.Event else { return }
                 Task { @MainActor in
                     guard let self else { return }
+                    let phase: String
+                    switch event.type { case .setup: phase = "Setup"; case .import: phase = "Download"; case .export: phase = "Upload"; @unknown default: phase = "Sync" }
+                    let scope = self.sharedStore?.identifier == event.storeIdentifier ? "Shared" : "Private"
+                    let outcome = event.endDate == nil ? "started" : event.succeeded ? "completed" : "failed"
+                    var detail = "\(event.startDate.formatted(date: .abbreviated, time: .standard)) · \(scope) \(phase): \(outcome)"
+                    if let failure = event.error { detail += " · " + Self.describe(failure) }
+                    self.syncDetails = Array(([detail] + self.syncDetails).prefix(30))
+                    #if DEBUG
+                    if ProcessInfo.processInfo.arguments.contains("--cloud-diagnostic") { print("SettlingUp cloud diagnostic: " + detail) }
+                    #endif
                     if let failure = event.error {
                         self.status = "Saved on device · iCloud needs attention"
-                        self.error = "iCloud could not finish syncing. Local changes are saved and will retry. \(failure.localizedDescription)"
+                        self.error = "iCloud could not finish syncing. Your tabs remain saved on this device. \(Self.describe(failure))"
                     } else if let end = event.endDate, event.succeeded {
-                        self.lastSync = end
-                        self.status = "Saved on device · Last iCloud activity \(end.formatted(date: .omitted, time: .shortened))"
-                        self.reload()
+                        if event.type == .import { self.lastImport = end; self.refresh() }
+                        if event.type == .export { self.lastExport = end }
+                        if event.type != .setup {
+                            self.lastSync = end
+                            self.status = "Saved on device · \(phase) completed \(end.formatted(date: .omitted, time: .shortened))"
+                        }
+                    } else if event.endDate == nil {
+                        self.status = "Saved on device · iCloud \(phase.lowercased()) in progress"
                     }
                 }
             })
@@ -158,7 +208,7 @@ final class TabStore: ObservableObject {
                     default: throw TabError.invalid("This tab needs a newer version of SettlingUp.")
                     }
                 }
-                snapshot.people.sort { $0.id.uuidString < $1.id.uuidString }
+                snapshot.people.sort { ($0.order ?? Int.max, $0.id.uuidString) < ($1.order ?? Int.max, $1.id.uuidString) }
                 snapshot.expenses.sort { $0.date > $1.date }
                 snapshot.transfers.sort { $0.date > $1.date }
                 try snapshot.validate()
@@ -171,12 +221,32 @@ final class TabStore: ObservableObject {
 
     func refresh() {
         guard ready, !context.hasChanges else { return }
-        context.refreshAllObjects()
-        reload()
+        // Merge imported insertions, relationship changes and deletions before rendering.
+        // Keep registered objects valid while an iCloud share operation is in flight.
+        do {
+            for store in container.persistentStoreCoordinator.persistentStores where store.type == NSSQLiteStoreType {
+                let request = NSPersistentHistoryChangeRequest.fetchHistory(after: historyTokens[store.identifier])
+                request.affectedStores = [store]
+                if let result = try context.execute(request) as? NSPersistentHistoryResult,
+                   let transactions = result.result as? [NSPersistentHistoryTransaction] {
+                    for transaction in transactions {
+                        if let changes = transaction.objectIDNotification().userInfo {
+                            NSManagedObjectContext.mergeChanges(fromRemoteContextSave: changes, into: [context])
+                        }
+                    }
+                    if let token = transactions.last?.token { historyTokens[store.identifier] = token }
+                }
+            }
+            context.refreshAllObjects()
+            reload()
+        } catch { self.error = "Could not refresh imported changes. " + error.localizedDescription }
     }
 
     private func commit() throws {
-        do { try context.save(); reload() }
+        do {
+            try context.save(); reload()
+            if cloudEnabled { status = "Saved on device · Waiting for iCloud upload" }
+        }
         catch { context.rollback(); reload(); throw error }
     }
 
@@ -198,7 +268,8 @@ final class TabStore: ObservableObject {
     @discardableResult
     func create(name: String, names: [String]) throws -> UUID {
         guard ready, dataReadable, let privateStore else { throw TabError.invalid("Storage is not ready.") }
-        let people = names.map { Person(name: $0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        let people = names.enumerated().map { Person(name: $0.element.trimmingCharacters(in: .whitespacesAndNewlines), order: $0.offset) }
+        guard Set(people.map { $0.name.lowercased() }).count == people.count else { throw TabError.invalid("That name is already in the list.") }
         let snapshot = TabSnapshot(name: name.trimmingCharacters(in: .whitespacesAndNewlines), people: people)
         try snapshot.validate()
         guard people.count >= 2 else { throw TabError.invalid("Add at least two people.") }
@@ -212,10 +283,42 @@ final class TabStore: ObservableObject {
 
     func addPerson(_ name: String, tabID: UUID) throws {
         let tab = try tabObject(tabID)
-        let person = Person(name: name.trimmingCharacters(in: .whitespacesAndNewlines))
+        var person = Person(name: name.trimmingCharacters(in: .whitespacesAndNewlines))
         guard var snapshot = tabs.first(where: { $0.id == tabID }) else { return }
+        guard !snapshot.people.contains(where: { $0.name.lowercased() == person.name.lowercased() }) else { throw TabError.invalid("That name is already in the list.") }
+        person.order = (snapshot.people.compactMap(\.order).max() ?? snapshot.people.count - 1) + 1
         snapshot.people.append(person); try snapshot.validate()
         try insert(person, id: person.id, kind: "person", tab: tab); try commit()
+    }
+
+    func renamePerson(_ person: Person, name: String, tabID: UUID) throws {
+        let tab = try tabObject(tabID)
+        let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty, cleaned.count <= 80,
+              let snapshot = tabs.first(where: { $0.id == tabID }),
+              !snapshot.people.contains(where: { $0.id != person.id && $0.name.lowercased() == cleaned.lowercased() }),
+              let entry = tab.entries?.first(where: { $0.kind == "person" && $0.id == person.id }),
+              let data = entry.payload, try JSONDecoder().decode(Person.self, from: data) == person else {
+            throw TabError.invalid("Check the name. It may already be in use, or this person changed on another device.")
+        }
+        var updated = person; updated.name = cleaned
+        entry.payload = try JSONEncoder().encode(updated)
+        try commit()
+    }
+
+    func removePerson(_ person: Person, tabID: UUID) throws {
+        let tab = try tabObject(tabID)
+        guard let snapshot = tabs.first(where: { $0.id == tabID }), snapshot.people.contains(person) else {
+            throw TabError.invalid("This person changed. Reopen the people screen.")
+        }
+        let expenseIDs = Set(snapshot.expenses.filter { $0.payer == person.id || $0.shares[person.id] != nil }.map(\.id))
+        let transferIDs = Set(snapshot.transfers.filter { $0.from == person.id || $0.to == person.id }.map(\.id))
+        for entry in tab.entries ?? [] {
+            if (entry.kind == "person" && entry.id == person.id) || (entry.kind == "expense" && entry.id.map(expenseIDs.contains) == true) || (entry.kind == "transfer" && entry.id.map(transferIDs.contains) == true) {
+                context.delete(entry)
+            }
+        }
+        try commit()
     }
 
     func save(_ expense: Expense, tabID: UUID, original: Expense? = nil) throws {
@@ -246,7 +349,7 @@ final class TabStore: ObservableObject {
 
     func record(_ payment: SuggestedPayment, tabID: UUID) throws {
         let tab = try tabObject(tabID)
-        guard let snapshot = tabs.first(where: { $0.id == tabID }), Settlement.smart(snapshot).contains(payment) else {
+        guard let snapshot = tabs.first(where: { $0.id == tabID }), (Settlement.displayedPayments(snapshot).contains(payment) || Settlement.displayedPayments(snapshot, direct: true).contains(payment)), Settlement.markedPayment(payment, in: snapshot) == nil else {
             throw TabError.invalid("The balances changed. Review the updated payment before recording it.")
         }
         guard snapshot.transfers.count < 10_000 else { throw TabError.invalid("This tab has reached its payment limit.") }
@@ -308,6 +411,19 @@ final class TabStore: ObservableObject {
         guard ready, dataReadable else { throw TabError.invalid("Some saved data is unavailable or still syncing. Try again after iCloud finishes.") }
         let backup = Backup(version: 1, tabs: tabs)
         return try JSONEncoder().encode(backup)
+    }
+
+    func createDemo(_ demo: DemoScenario) throws -> UUID {
+        guard ready, dataReadable, let privateStore else { throw TabError.invalid("Storage is unavailable.") }
+        let snapshot = try demo.snapshot()
+        do {
+            let tab = SUTab(context: context); context.assign(tab, to: privateStore)
+            tab.id = snapshot.id; tab.name = snapshot.name; tab.created = snapshot.created
+            for person in snapshot.people { try insert(person, id: person.id, kind: "person", tab: tab) }
+            for expense in snapshot.expenses { try insert(expense, id: expense.id, kind: "expense", tab: tab) }
+            try commit()
+            return snapshot.id
+        } catch { context.rollback(); reload(); throw error }
     }
 
     func importBackup(_ data: Data) throws {

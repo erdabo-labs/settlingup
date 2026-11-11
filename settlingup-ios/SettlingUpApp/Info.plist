@@ -4,11 +4,12 @@
 <dict>
 	<key>CKSharingSupported</key>
 	<true/>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
 	<key>UIAppFonts</key>
 	<array>
-		<string>Fonts/Outfit.ttf</string>
+		<string>Fonts/Outfit-Regular.ttf</string>
+		<string>Fonts/Outfit-SemiBold.ttf</string>
+		<string>Fonts/Outfit-Bold.ttf</string>
+		<string>Fonts/Outfit-ExtraBold.ttf</string>
 		<string>Fonts/JetBrainsMono.ttf</string>
 	</array>
 	<key>UIBackgroundModes</key>

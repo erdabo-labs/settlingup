@@ -1,5 +1,10 @@
 # Release preparation
 
+## Current corrective beta — November 11, 2026
+
+Build **0.1.0 (2)** uploaded successfully for internal owner testing. Production sync remains unresolved; do not describe this beta as release-ready. Restored workflows, validation, and remaining gaps are recorded in [PARITY-REPAIR.md](PARITY-REPAIR.md), with test instructions in [BUILD-2-TEST-NOTES.md](BUILD-2-TEST-NOTES.md). The setup record below describes the original October upload.
+
+
 Status: **0.1.0 (1) is available for internal TestFlight testing as of October 30, 2026.** Apple finished processing it; the Personal group shows **1 Tester · 1 Build**, with the build status **Testing**. The owner account is the sole tester. It is not a public App Store release and two-account collaboration acceptance checks remain outstanding. The App ID and matching CloudKit container are registered and linked; Core Data generated the development schema and it was deployed to Production. Production record types `CD_SUEntry` and `CD_SUTab` were verified in CloudKit Console. Do not repeat these registrations or shut down the website or Supabase as part of this milestone.
 
 App Store Connect listing: **SettlingUp: Shared Tabs**, app ID **6828948001**, bundle ID `com.erdabolabs.SettlingUp`. The shorter listing name was unavailable; the home-screen name remains SettlingUp. [TestFlight](https://appstoreconnect.apple.com/apps/6828948001/testflight).

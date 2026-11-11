@@ -4,56 +4,79 @@ import UniformTypeIdentifiers
 struct LibraryView: View {
     @EnvironmentObject private var store: TabStore
     @Environment(\.scenePhase) private var scenePhase
-    @State private var selection: UUID?
+    @State private var selected: UUID?
+    @State private var tabName = ""
     @State private var creating = false
     @State private var settings = false
-    @State private var search = ""
-    private var filtered: [TabSnapshot] { store.tabs.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) } }
+    @State private var error: String?
     var body: some View {
-        NavigationSplitView {
-            List(selection: $selection) {
-                Section {
-                    ForEach(filtered) { tab in
-                        NavigationLink(value: tab.id) { TabCard(tab: tab) }
-                    }
-                } header: { Text("Your tabs") } footer: {
-                    Label(store.status, systemImage: store.cloudEnabled ? "icloud" : "iphone").font(.caption)
+        NavigationStack {
+            Group {
+                if let selected, let tab = store.tabs.first(where: { $0.id == selected }) {
+                    TabDetailView(tab: tab) { self.selected = nil }
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 20) {
+                            BrandHeader { selected = nil }
+                            StepProgress(step: 0)
+                            VStack(alignment: .center, spacing: 8) {
+                                Text("Split expenses.").font(Brand.ui(.title, weight: .heavy))
+                                Text("Settle up fairly.").font(Brand.ui(.title, weight: .heavy)).foregroundStyle(Brand.accent)
+                                Text("Shared tabs with your friends. Saved on your iPhone and shared through iCloud.").font(Brand.ui(.subheadline)).foregroundStyle(.secondary)
+                                Text("✈️ Trips    🍕 Dinners    🏠 Bills    🎉 Events").font(Brand.ui(.caption)).padding(.top, 6)
+                            }.multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.vertical, 24)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("TAB NAME").font(Brand.ui(.caption)).foregroundStyle(.secondary)
+                                TextField("Summer Trip 2026", text: $tabName).font(Brand.ui(.title3)).webInput()
+                            }.webCard()
+                            Button {
+                                if tabName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { error = "Give your tab a name first." }
+                                else { error = nil; creating = true }
+                            } label: { Text("Add people →").frame(maxWidth: .infinity) }.buttonStyle(WebButton()).disabled(!store.ready)
+                            if let error { Text(error).foregroundStyle(.red) }
+                            if !store.tabs.isEmpty {
+                                Text("YOUR TABS").font(Brand.ui(.caption, weight: .semibold)).foregroundStyle(.secondary)
+                                ForEach(store.tabs) { tab in
+                                    TabCard(tab: tab) { selected = tab.id }.webCard()
+                                }
+                            }
+                            DisclosureGroup("Try a demo") {
+                                VStack(spacing: 10) {
+                                    ForEach(DemoScenario.all) { demo in
+                                        Button {
+                                            do { selected = try store.createDemo(demo) }
+                                            catch { self.error = error.localizedDescription }
+                                        } label: {
+                                            HStack {
+                                                Text(demo.icon).font(.title2)
+                                                VStack(alignment: .leading, spacing: 4) {
+                                                    Text(demo.title).font(Brand.ui(.subheadline, weight: .semibold))
+                                                    Text("\(demo.people.count) people · \(demo.expenses.count) expenses").font(Brand.ui(.caption)).foregroundStyle(.secondary)
+                                                }
+                                                Spacer(); Image(systemName: "arrow.right")
+                                            }.webCard()
+                                        }.buttonStyle(.plain)
+                                    }
+                                }.padding(.top, 10)
+                            }
+                            Label(store.status, systemImage: store.cloudEnabled ? "icloud" : "iphone").font(Brand.ui(.caption)).foregroundStyle(.secondary)
+                            Button("Settings & backup", systemImage: "gearshape") { settings = true }.frame(minHeight: 44)
+                        }.padding(16).frame(maxWidth: 480).frame(maxWidth: .infinity)
+                    }.background(Brand.background)
                 }
-            }
-            .scrollContentBackground(.hidden).background(Brand.background)
-            .overlay {
-                if store.ready && store.tabs.isEmpty {
-                    ContentUnavailableView {
-                        Label("Good times. Easy splits.", systemImage: "person.2.circle")
-                    } description: {
-                        Text("Start a tab for dinner, a trip, or the everyday things you share.")
-                    } actions: {
-                        Button("Create a tab", systemImage: "plus") { creating = true }.buttonStyle(.borderedProminent)
-                    }
-                } else if !store.ready {
-                    ContentUnavailableView("Could not open your tabs", systemImage: "externaldrive.badge.exclamationmark", description: Text(store.error ?? "Reopen the app to try again. Your saved files have been kept."))
-                }
-            }
-            .navigationTitle("SettlingUp")
-            .searchable(text: $search, prompt: "Find a tab")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Settings", systemImage: "gearshape") { settings = true } }
-                ToolbarItem(placement: .primaryAction) { Button("New tab", systemImage: "plus") { creating = true }.disabled(!store.ready) }
-            }
-        } detail: {
-            if let id = selection, let tab = store.tabs.first(where: { $0.id == id }) {
-                TabDetailView(tab: tab)
-            } else {
-                ContentUnavailableView("Pick a tab", systemImage: "person.2", description: Text("Keep shared expenses and settle up together."))
-                    .background(Brand.background)
+            }.toolbar(.hidden, for: .navigationBar)
+        }.font(Brand.ui())
+        .sheet(isPresented: $creating) { CreateTabView(initialName: tabName) { selected = $0; tabName = "" }.environmentObject(store) }
+        .sheet(isPresented: $settings) { SettingsView().environmentObject(store) }
+        .safeAreaInset(edge: .bottom) {
+            if let error = store.error {
+                HStack(alignment: .top) {
+                    Text(error).font(Brand.ui(.caption))
+                    Spacer()
+                    Button("Dismiss", systemImage: "xmark") { store.error = nil }.labelStyle(.iconOnly).frame(width: 44, height: 44)
+                }.padding().background(Brand.background).overlay(alignment: .top) { Divider() }
             }
         }
-        .font(Brand.ui())
-        .sheet(isPresented: $creating) { CreateTabView { selection = $0 }.environmentObject(store) }
-        .sheet(isPresented: $settings) { SettingsView().environmentObject(store) }
-        .alert("SettlingUp needs attention", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
-            Button("OK") { store.error = nil }
-        } message: { Text(store.error ?? "") }
         .onChange(of: scenePhase) { _, phase in if phase == .active { store.refresh() } }
     }
 }
@@ -61,218 +84,343 @@ struct LibraryView: View {
 struct CreateTabView: View {
     @EnvironmentObject private var store: TabStore
     @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var names = ["", ""]
-    @State private var error: String?
+    let initialName: String
     let created: (UUID) -> Void
+    @State private var names: [String] = []
+    @State private var newName = ""
+    @State private var error: String?
     var body: some View {
         NavigationStack {
-            Form {
-                Section("What's the occasion?") { TextField("Dinner, weekend away…", text: $name).textInputAutocapitalization(.sentences) }
-                Section {
-                    ForEach(names.indices, id: \.self) { index in
-                        TextField("Person \(index + 1)", text: $names[index]).textContentType(.name)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    BrandHeader { dismiss() }
+                    StepProgress(step: 1)
+                    Text("Who's in?").font(Brand.ui(.largeTitle, weight: .bold))
+                    Text("Add everyone — including yourself.").foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("PEOPLE ON THIS TAB").font(Brand.ui(.caption)).foregroundStyle(.secondary)
+                        ForEach(names.indices, id: \.self) { index in
+                            HStack {
+                                TextField("Name", text: $names[index]).webInput()
+                                Button("Remove", systemImage: "xmark") { names.remove(at: index) }.labelStyle(.iconOnly).frame(width: 44, height: 44)
+                            }
+                        }
+                        HStack {
+                            TextField("Add a name…", text: $newName).webInput().onSubmit(add)
+                            Button("+ Add", action: add).buttonStyle(WebButton(primary: false))
+                        }
+                    }.webCard()
+                    if let error { Text(error).foregroundStyle(.red).font(Brand.ui(.subheadline)) }
+                    HStack {
+                        Button("← Back") { dismiss() }.buttonStyle(WebButton(primary: false))
+                        Button {
+                            do {
+                                var people = names
+                                if !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { people.append(newName) }
+                                let id = try store.create(name: initialName, names: people)
+                                created(id); dismiss()
+                            } catch { self.error = error.localizedDescription }
+                        } label: { Text("Add expenses →").frame(maxWidth: .infinity) }.buttonStyle(WebButton())
                     }
-                    Button("Add another person", systemImage: "person.badge.plus") { names.append("") }.disabled(names.count >= 100)
-                } header: { Text("Who's in?") } footer: { Text("You can invite people through iCloud after creating the tab.") }
-                if let error { Section { Text(error).foregroundStyle(.red) } }
-            }
-            .navigationTitle("New tab").navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
-                        do {
-                            let id = try store.create(name: name, names: names.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
-                            created(id); dismiss()
-                        } catch { self.error = error.localizedDescription }
-                    }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-        }
+                }.padding(16).frame(maxWidth: 480).frame(maxWidth: .infinity)
+            }.background(Brand.background).toolbar(.hidden, for: .navigationBar)
+        }.font(Brand.ui())
+    }
+    private func add() {
+        let value = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        guard !names.contains(where: { $0.lowercased() == value.lowercased() }) else { error = "That name is already in the list."; return }
+        names.append(value); newName = ""; error = nil
     }
 }
 
 struct TabDetailView: View {
     @EnvironmentObject private var store: TabStore
-    @Environment(\.dynamicTypeSize) private var typeSize
-    @State private var addingExpense = false
+    let tab: TabSnapshot
+    let home: () -> Void
+    @State private var step = 2
+    @State private var direct = false
     @State private var editing: Expense?
+    @State private var removing: Expense?
     @State private var shared: SharedTab?
     @State private var sharing = false
-    @State private var personName = ""
-    @State private var addingPerson = false
-    @State private var renaming = false
-    @State private var tabName = ""
-    @State private var deletingTab = false
-    @State private var payment: SuggestedPayment?
-    @State private var undoPayment: Transfer?
-    @State private var removing: Expense?
-    let tab: TabSnapshot
+    @State private var identity = ""
+    @State private var pickingIdentity = false
+    @State private var newName = ""
+    @State private var renamedPerson: Person?
+    @State private var renameText = ""
+    @State private var removedPerson: Person?
+    @State private var renameTab = false
+    @State private var error: String?
     private var current: TabSnapshot { store.tabs.first { $0.id == tab.id } ?? tab }
-    private var summary: String {
-        let t = current
-        let payments = Settlement.smart(t).map { "\(t.person($0.from)) pays \(t.person($0.to)) \(Money.text($0.cents))" }
-        return ([t.name, "Total expenses: \(Money.text(t.total))"] + (payments.isEmpty ? ["Everyone is settled up."] : payments) + ["Shared with SettlingUp"]).joined(separator: "\n")
-    }
+    private var payments: [SuggestedPayment] { Settlement.displayedPayments(current, direct: direct) }
+    private func name(_ id: UUID) -> String { identity == id.uuidString ? "You" : current.person(id) }
     var body: some View {
-        GeometryReader { geometry in
+        ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    header
-                    if geometry.size.width >= 720 && !typeSize.isAccessibilitySize {
-                        HStack(alignment: .top, spacing: 24) {
-                            expenses.frame(maxWidth: .infinity)
-                            settlement.frame(maxWidth: .infinity)
+                VStack(alignment: .leading, spacing: 20) {
+                    BrandHeader(home: home).id("top")
+                    StepProgress(step: step)
+                    HStack {
+                        Button { renameText = current.name; renameTab = true } label: {
+                            Text(current.name).font(Brand.ui(.title, weight: .bold)).foregroundStyle(.primary)
+                        }.buttonStyle(.plain).accessibilityLabel("Rename \(current.name)")
+                        Spacer()
+                        Button { pickingIdentity = true } label: {
+                            Label(identity.isEmpty ? "Who are you?" : name(UUID(uuidString: identity) ?? UUID()), systemImage: "person.crop.circle")
+                                .font(Brand.ui(.caption)).padding(8).background(Brand.accent.opacity(0.10), in: Capsule())
                         }
-                    } else { expenses; settlement }
-                    people
-                    Label(store.status, systemImage: store.cloudEnabled ? "icloud" : "iphone")
-                        .font(Brand.ui(.caption)).foregroundStyle(.secondary)
-                }
-                .padding().frame(maxWidth: 1100).frame(maxWidth: .infinity)
+                    }
+                    if current.name.hasPrefix("DEMO: ") {
+                        Text("🎭 This is a demo tab — edit freely, or load a fresh one from the home screen.").font(Brand.ui(.caption)).webCard()
+                    }
+                    if let error { Text(error).foregroundStyle(.red).font(Brand.ui(.subheadline)) }
+                    if step == 1 { peopleEditor }
+                    else if step == 2 {
+                        Text("Add expenses").foregroundStyle(.secondary)
+                        expenses
+                        ExpenseEditor(tab: current, inline: true).environmentObject(store)
+                    } else { settlement }
+                    navigation
+                    Label(store.status, systemImage: store.cloudEnabled ? "icloud" : "iphone").font(Brand.ui(.caption)).foregroundStyle(.secondary)
+                }.padding(16).frame(maxWidth: 480).frame(maxWidth: .infinity)
             }.background(Brand.background)
-        }
-        .navigationTitle(current.name).navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Button("Invite or manage people", systemImage: "person.crop.circle.badge.plus") {
-                        sharing = true
-                        Task {
-                            defer { sharing = false }
-                            do { shared = try await store.prepareShare(tabID: tab.id) }
-                            catch { store.error = error.localizedDescription }
-                        }
-                    }.disabled(sharing || !store.cloudEnabled)
-                    ShareLink(item: summary) { Label("Send summary", systemImage: "square.and.arrow.up") }
-                    Button("Add a person", systemImage: "person.badge.plus") { addingPerson = true }
-                    Button("Rename tab", systemImage: "pencil") { tabName = current.name; renaming = true }
-                    Button("Delete tab", systemImage: "trash", role: .destructive) { deletingTab = true }
-                } label: {
-                    if sharing { ProgressView() } else { Label("Share and manage", systemImage: "ellipsis.circle") }
-                }
-            }
-        }
-        .safeAreaInset(edge: .bottom) {
-            Button { addingExpense = true } label: {
-                Label("Add expense", systemImage: "plus").font(Brand.ui().weight(.semibold)).frame(maxWidth: 520).padding(.vertical, 8)
-            }.buttonStyle(.borderedProminent).padding().frame(maxWidth: .infinity).background(.bar)
-        }
-        .sheet(isPresented: $addingExpense) { ExpenseEditor(tab: current).environmentObject(store) }
-        .sheet(item: $editing) { expense in ExpenseEditor(tab: current, original: expense).environmentObject(store) }
+                .onChange(of: step) { _, _ in proxy.scrollTo("top", anchor: .top) }
+        }.onAppear { identity = UserDefaults.standard.string(forKey: "identity-\(tab.id)") ?? "" }
+        .sheet(item: $editing) { ExpenseEditor(tab: current, original: $0).environmentObject(store) }
         .sheet(item: $shared) { CloudSharingView(shared: $0, store: store) }
-        .alert("Add a person", isPresented: $addingPerson) {
-            TextField("Name", text: $personName)
-            Button("Cancel", role: .cancel) { personName = "" }
-            Button("Add") {
-                perform { try store.addPerson(personName, tabID: tab.id) }; personName = ""
-            }
-        }
-        .alert("Rename tab", isPresented: $renaming) {
-            TextField("Tab name", text: $tabName)
+        .sheet(isPresented: $pickingIdentity) { identityPicker }
+        .alert("Rename tab", isPresented: $renameTab) {
+            TextField("Tab name", text: $renameText)
             Button("Cancel", role: .cancel) {}
-            Button("Save") { perform { try store.rename(tab.id, name: tabName) } }
+            Button("Save") { perform { try store.rename(tab.id, name: renameText) } }
         }
-        .confirmationDialog("Delete this tab?", isPresented: $deletingTab, titleVisibility: .visible) {
-            Button("Delete tab", role: .destructive) { perform { try store.deleteTab(tab.id) } }
-        } message: { Text("This permanently removes the tab and its entries from your library and synced devices. Export a backup first if you want to keep it. Shared tabs must be unshared first.") }
-        .confirmationDialog("Record this payment?", isPresented: Binding(get: { payment != nil }, set: { if !$0 { payment = nil } }), titleVisibility: .visible) {
-            if let payment {
-                Button("Record \(Money.text(payment.cents)) paid") { perform { try store.record(payment, tabID: tab.id) }; self.payment = nil }
-            }
-            Button("Cancel", role: .cancel) { payment = nil }
-        } message: { Text("Only record money that has actually been sent. SettlingUp does not transfer money.") }
+        .alert("Rename person", isPresented: Binding(get: { renamedPerson != nil }, set: { if !$0 { renamedPerson = nil } })) {
+            TextField("Name", text: $renameText)
+            Button("Cancel", role: .cancel) { renamedPerson = nil }
+            Button("Save") { if let person = renamedPerson { perform { try store.renamePerson(person, name: renameText, tabID: tab.id) } }; renamedPerson = nil }
+        }
         .confirmationDialog("Remove this expense?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
             if let removing { Button("Delete expense", role: .destructive) { perform { try store.deleteExpense(removing, tabID: tab.id) }; self.removing = nil } }
-        } message: { Text("Balances will update for everyone sharing this tab. Recorded payments will remain.") }
-        .confirmationDialog("Undo this recorded payment?", isPresented: Binding(get: { undoPayment != nil }, set: { if !$0 { undoPayment = nil } }), titleVisibility: .visible) {
-            if let undoPayment { Button("Undo recording", role: .destructive) { perform { try store.undo(undoPayment, tabID: tab.id) }; self.undoPayment = nil } }
-        } message: { Text("This only changes the record. It does not reverse a money transfer.") }
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("THE TAB SO FAR").font(Brand.ui(.caption).weight(.semibold)).foregroundStyle(.secondary)
-            MoneyLabel(cents: current.total, style: .largeTitle).foregroundStyle(Brand.accent)
-            Text("\(current.people.count) people · \(current.expenses.count) expenses").foregroundStyle(.secondary)
-        }.padding(20).frame(maxWidth: .infinity, alignment: .leading).background(Brand.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 22))
-    }
-
-    private var expenses: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Expenses").font(Brand.ui(.title2).weight(.semibold))
-            if current.expenses.isEmpty { Text("Add the first expense. We'll handle the math.").foregroundStyle(.secondary).padding(.vertical) }
-            ForEach(current.expenses) { expense in
-                VStack(alignment: .leading, spacing: 10) {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .firstTextBaseline) { Text(expense.title).fontWeight(.semibold); Spacer(); MoneyLabel(cents: expense.cents) }
-                        VStack(alignment: .leading) { Text(expense.title).fontWeight(.semibold); MoneyLabel(cents: expense.cents) }
-                    }
-                    Text("Paid by \(current.person(expense.payer)) · \(expense.mode.rawValue) split").font(Brand.ui(.subheadline)).foregroundStyle(.secondary)
-                    DisclosureGroup("Split details") {
-                        ForEach(current.people.filter { expense.shares[$0.id] != nil }) { person in
-                            HStack { Text(person.name); Spacer(); MoneyLabel(cents: expense.shares[person.id] ?? 0, style: .subheadline) }.padding(.vertical, 4)
-                        }
-                    }.font(Brand.ui(.subheadline))
-                    HStack {
-                        Button("Edit", systemImage: "pencil") { editing = expense }.frame(minHeight: 44)
-                        Spacer()
-                        Button("Delete", systemImage: "trash", role: .destructive) { removing = expense }.frame(minHeight: 44)
-                    }.font(Brand.ui(.subheadline))
-                }.padding(16).background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 16))
-            }
         }
-    }
-
-    private var settlement: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Settle up").font(Brand.ui(.title2).weight(.semibold))
-            let suggestions = Settlement.smart(current)
-            if suggestions.isEmpty {
-                Label(current.expenses.isEmpty ? "No expenses yet" : "Everyone is settled up", systemImage: "checkmark.circle")
-                    .foregroundStyle(.green).padding(.vertical)
-            }
-            ForEach(suggestions) { suggestion in
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("\(current.person(suggestion.from)) pays \(current.person(suggestion.to))").fontWeight(.medium)
-                    MoneyLabel(cents: suggestion.cents, style: .title2).foregroundStyle(Brand.accent)
-                    Button("Record as paid", systemImage: "checkmark") { payment = suggestion }
-                        .buttonStyle(.bordered).frame(minHeight: 44)
-                }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Brand.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-            }
-            if !current.transfers.isEmpty {
-                Text("Recorded payments").font(Brand.ui(.title3)).padding(.top, 8)
-                ForEach(current.transfers) { transfer in
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("\(current.person(transfer.from)) paid \(current.person(transfer.to))")
-                        MoneyLabel(cents: transfer.cents)
-                        Text(transfer.date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
-                        Button("Undo recording", role: .destructive) { undoPayment = transfer }.frame(minHeight: 44)
-                    }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 16))
+        .confirmationDialog("Remove \(removedPerson?.name ?? "person")?", isPresented: Binding(get: { removedPerson != nil }, set: { if !$0 { removedPerson = nil } }), titleVisibility: .visible) {
+            if let person = removedPerson {
+                Button("Remove person and related entries", role: .destructive) {
+                    perform { try store.removePerson(person, tabID: tab.id) }
+                    if identity == person.id.uuidString { setIdentity("") }
+                    removedPerson = nil
                 }
             }
+        } message: {
+            let count = current.expenses.filter { $0.payer == removedPerson?.id || $0.shares.keys.contains(removedPerson?.id ?? UUID()) }.count
+            Text("This also deletes \(count) expenses involving this person and their recorded payments. This cannot be undone.")
         }
     }
-
-    private var people: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("People & balances").font(Brand.ui(.title2).weight(.semibold))
-            let balances = Settlement.balances(current)
+    private var peopleEditor: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Who's in?").font(Brand.ui(.title2, weight: .bold))
+            Text("Add everyone — including yourself.").foregroundStyle(.secondary)
             ForEach(current.people) { person in
-                let balance = balances[person.id, default: 0]
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(person.name).fontWeight(.medium)
-                    Text(balance == 0 ? "Settled up" : balance > 0 ? "Gets back \(Money.text(balance))" : "Owes \(Money.text(-balance))")
-                        .font(Brand.number(.subheadline)).foregroundStyle(balance > 0 ? Brand.accent : .secondary)
-                }.padding(.vertical, 4).accessibilityElement(children: .combine)
+                HStack {
+                    Text(name(person.id)); Spacer()
+                    Button("Rename", systemImage: "pencil") { renameText = person.name; renamedPerson = person }.labelStyle(.iconOnly).frame(width: 44, height: 44)
+                    Button("Remove", systemImage: "xmark", role: .destructive) { removedPerson = person }.labelStyle(.iconOnly).frame(width: 44, height: 44)
+                }
+            }
+            HStack {
+                TextField("Add a name…", text: $newName).webInput()
+                Button("+ Add") { perform { try store.addPerson(newName, tabID: tab.id); newName = "" } }.buttonStyle(WebButton(primary: false))
+            }
+        }.webCard()
+    }
+    private var expenses: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !current.expenses.isEmpty {
+                HStack { Text("\(current.expenses.count) EXPENSES").font(Brand.ui(.caption)); Spacer(); MoneyLabel(cents: current.total).foregroundStyle(Brand.accent) }
+            }
+            ForEach(current.expenses) { expense in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline) { Text(expense.title).font(Brand.ui(.subheadline, weight: .semibold)); Spacer(); MoneyLabel(cents: expense.cents) }
+                    HStack {
+                        Text("\(name(expense.payer)) paid").font(Brand.ui(.caption)).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Edit", systemImage: "pencil") { editing = expense }.labelStyle(.iconOnly).frame(width: 44, height: 44)
+                        Button("Delete", systemImage: "trash", role: .destructive) { removing = expense }.labelStyle(.iconOnly).frame(width: 44, height: 44)
+                    }
+                    DisclosureGroup("\(expense.mode.rawValue) · \(expense.shares.count) \(expense.shares.count == 1 ? "person" : "people")") {
+                        ForEach(current.people.filter { expense.shares[$0.id] != nil }) { person in
+                            HStack { Text(name(person.id)); Spacer(); MoneyLabel(cents: expense.shares[person.id] ?? 0, style: .subheadline) }.padding(.vertical, 4)
+                        }
+                    }.font(Brand.ui(.subheadline))
+                }.webCard()
             }
         }
     }
-    private func perform(_ action: () throws -> Void) {
-        do { try action() } catch { store.error = error.localizedDescription }
+    private var settlement: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("🎉   ✨   🙌   💸   🤝").font(.title2).frame(maxWidth: .infinity)
+            Text("tap any payment to mark it done").font(Brand.ui(.subheadline)).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+            HStack {
+                stat("Total", value: Money.text(current.total))
+                stat("Expenses", value: String(current.expenses.count))
+                stat("People", value: String(current.people.count))
+            }.webCard()
+            HStack {
+                Text("Who pays who").font(Brand.ui(.title3, weight: .semibold))
+                Spacer()
+                Text("\(payments.count)").font(Brand.number(.caption)).padding(6).background(Brand.accent.opacity(0.12), in: Capsule())
+            }
+            HStack(spacing: 4) {
+                Button("Smart") { direct = false }.buttonStyle(WebSegment(selected: !direct))
+                Button("Direct") { direct = true }.buttonStyle(WebSegment(selected: direct))
+            }.accessibilityElement(children: .contain).accessibilityLabel("Settlement strategy")
+            DisclosureGroup {
+                Text("If Alex owes Sam $25 and Sam owes Jo $25, Smart suggests Alex pays Jo $25. Direct keeps both payments. Both settle the original expenses. Paid cards stay visible so you can mark or unmark them.")
+                    .font(Brand.ui(.subheadline)).padding(.top, 8)
+            } label: { Text(direct ? "Direct — settle with each person individually." : "Smart — reduces the number of transfers.").font(Brand.ui(.subheadline)) }
+            if payments.isEmpty { Text("🎉 Everyone is settled — nothing to pay!").foregroundStyle(.green).webCard() }
+            ForEach(payments) { payment in paymentCard(payment) }
+            let unlisted = current.transfers.filter { transfer in !payments.contains { $0.from == transfer.from && $0.to == transfer.to && abs($0.cents - transfer.cents) <= 1 } }
+            if !unlisted.isEmpty {
+                DisclosureGroup("Other recorded payments") {
+                    Text("These payments were recorded before the expenses or strategy changed.").font(Brand.ui(.caption))
+                    ForEach(unlisted) { transfer in
+                        HStack {
+                            Text("\(name(transfer.from)) → \(name(transfer.to))"); Spacer(); MoneyLabel(cents: transfer.cents, style: .caption)
+                            Button("Undo") { perform { try store.undo(transfer, tabID: tab.id) } }.frame(minHeight: 44)
+                        }.font(Brand.ui(.caption))
+                    }
+                }
+            }
+            Divider()
+            Text("INDIVIDUAL BREAKDOWN").font(Brand.ui(.caption, weight: .semibold)).foregroundStyle(.secondary)
+            ForEach(current.people.sorted { ($0.id.uuidString == identity ? 0 : 1) < ($1.id.uuidString == identity ? 0 : 1) }) { person in
+                PersonBreakdown(tab: current, person: person, isMe: person.id.uuidString == identity, payments: payments)
+            }
+        }
     }
+    private func stat(_ label: String, value: String) -> some View {
+        VStack(spacing: 6) { Text(value).font(Brand.number(.subheadline)).foregroundStyle(Brand.accent); Text(label).font(Brand.ui(.caption)).foregroundStyle(.secondary) }.frame(maxWidth: .infinity)
+    }
+    private func paymentCard(_ payment: SuggestedPayment) -> some View {
+        let marked = Settlement.markedPayment(payment, in: current)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading) { Text(name(payment.from)).font(Brand.ui(.subheadline, weight: .semibold)); Text("pays").foregroundStyle(.secondary) }
+                Spacer(); Image(systemName: "arrow.right").foregroundStyle(.secondary); Spacer()
+                VStack(alignment: .trailing) { Text(name(payment.to)).font(Brand.ui(.subheadline, weight: .semibold)); Text("receives").foregroundStyle(.secondary) }
+            }.font(Brand.ui(.subheadline))
+            HStack {
+                MoneyLabel(cents: payment.cents, style: .title2).foregroundStyle(marked == nil ? Brand.accent : .green).strikethrough(marked != nil)
+                Spacer()
+                Button(marked == nil ? "Mark paid" : "✓ Paid · Undo") {
+                    perform {
+                        if let marked { try store.undo(marked, tabID: tab.id) }
+                        else { try store.record(payment, tabID: tab.id) }
+                    }
+                }.buttonStyle(WebButton(primary: false))
+            }
+        }.webCard().opacity(marked == nil ? 1 : 0.65)
+    }
+    private var navigation: some View {
+        VStack(spacing: 12) {
+            Button { share() } label: {
+                HStack { if sharing { ProgressView() }; Label("Share this tab", systemImage: "link").frame(maxWidth: .infinity) }
+            }.buttonStyle(WebButton(primary: false)).disabled(sharing || !store.cloudEnabled)
+            HStack {
+                Button(step == 3 ? "← Edit expenses" : "← Back") { step = step == 3 ? 2 : step == 2 ? 1 : 1 }.buttonStyle(WebButton(primary: false))
+                if step < 3 {
+                    Button {
+                        if current.people.count < 2 { error = "Add at least two people first." }
+                        else if step == 2 && current.expenses.isEmpty { error = "Add at least one expense first." }
+                        else { error = nil; step += 1 }
+                    } label: { Text(step == 1 ? "Add expenses →" : "Settle up →").frame(maxWidth: .infinity) }.buttonStyle(WebButton())
+                } else { Button("New tab", action: home).frame(maxWidth: .infinity) }
+            }
+        }
+    }
+    private var identityPicker: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Who are you?").font(Brand.ui(.largeTitle, weight: .bold))
+                    Text("Pick your name or add yourself to the tab.").foregroundStyle(.secondary)
+                    ForEach(current.people) { person in
+                        PersonPill(name: person.name, selected: person.id.uuidString == identity) { setIdentity(person.id.uuidString); pickingIdentity = false }
+                    }
+                    HStack {
+                        TextField("Your name", text: $newName).webInput()
+                        Button("+ Add") {
+                            perform {
+                                try store.addPerson(newName, tabID: tab.id)
+                                if let person = current.people.first(where: { $0.name == newName.trimmingCharacters(in: .whitespacesAndNewlines) }) { setIdentity(person.id.uuidString) }
+                                newName = ""; pickingIdentity = false
+                            }
+                        }.buttonStyle(WebButton(primary: false))
+                    }
+                    Button("Skip for now") { setIdentity(""); pickingIdentity = false }.frame(maxWidth: .infinity, minHeight: 44)
+                    if let error { Text(error).foregroundStyle(.red) }
+                }.padding(20).frame(maxWidth: 480).frame(maxWidth: .infinity)
+            }.background(Brand.background)
+        }.font(Brand.ui())
+    }
+    private func setIdentity(_ value: String) { identity = value; UserDefaults.standard.set(value, forKey: "identity-\(tab.id)") }
+    private func share() {
+        sharing = true
+        Task {
+            defer { sharing = false }
+            do { shared = try await store.prepareShare(tabID: tab.id) }
+            catch { self.error = error.localizedDescription }
+        }
+    }
+    private func perform(_ action: () throws -> Void) { do { try action(); error = nil } catch { self.error = error.localizedDescription } }
+}
+
+struct PersonBreakdown: View {
+    let tab: TabSnapshot
+    let person: Person
+    let isMe: Bool
+    let payments: [SuggestedPayment]
+    @State private var expanded = false
+    private var paid: Int { tab.expenses.filter { $0.payer == person.id }.reduce(0) { $0 + $1.cents } }
+    private var share: Int { tab.expenses.reduce(0) { $0 + ($1.shares[person.id] ?? 0) } }
+    private var net: Int { Settlement.balances(tab)[person.id, default: 0] }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button { expanded.toggle() } label: {
+                HStack {
+                    Text(isMe ? "You" : person.name).font(Brand.ui(.subheadline, weight: .semibold))
+                    Spacer()
+                    Text(net == 0 ? "settled ✓" : net > 0 ? "is owed \(Money.text(net))" : "owes \(Money.text(-net))").font(Brand.ui(.subheadline)).foregroundStyle(net == 0 ? .green : Brand.accent)
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.caption)
+                }.frame(minHeight: 44)
+            }.buttonStyle(.plain)
+            HStack { stat("Paid", paid); stat("Share", share); stat("Net", net) }
+            Text("\(isMe ? "You" : person.name) paid \(Money.text(paid)), \(isMe ? "your" : "their") share was \(Money.text(share)). \(net == 0 ? "All settled." : net > 0 ? "The group owes \(isMe ? "you" : "them") \(Money.text(net))." : "\(isMe ? "You owe" : "They owe") \(Money.text(-net)).")")
+                .font(Brand.ui(.subheadline)).foregroundStyle(.secondary)
+            if expanded {
+                Divider()
+                Text(isMe ? "WHAT YOU PAID" : "WHAT THEY PAID").font(Brand.ui(.caption)).foregroundStyle(.secondary)
+                ForEach(tab.expenses.filter { $0.payer == person.id }) { expense in row(expense.title, cents: expense.cents) }
+                Text(isMe ? "YOUR PORTION" : "THEIR PORTION").font(Brand.ui(.caption)).foregroundStyle(.secondary)
+                ForEach(tab.expenses.filter { $0.shares[person.id] != nil }) { expense in
+                    VStack(alignment: .leading, spacing: 3) {
+                        row(expense.title, cents: expense.shares[person.id] ?? 0)
+                        Text("\(tab.person(expense.payer)) paid").font(Brand.ui(.caption)).foregroundStyle(.secondary)
+                    }
+                }
+                ForEach(payments.filter { $0.from == person.id || $0.to == person.id }) { payment in
+                    row(payment.from == person.id ? "Pay \(tab.person(payment.to))" : "\(tab.person(payment.from)) pays you", cents: payment.cents)
+                        .strikethrough(Settlement.markedPayment(payment, in: tab) != nil)
+                }
+            }
+        }.webCard().overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(isMe ? Brand.accent : .clear))
+            .onAppear { expanded = isMe }
+    }
+    private func stat(_ title: String, _ cents: Int) -> some View {
+        VStack(spacing: 5) { MoneyLabel(cents: cents, style: .subheadline); Text(title).font(Brand.ui(.caption)).foregroundStyle(.secondary) }.frame(maxWidth: .infinity)
+    }
+    private func row(_ title: String, cents: Int) -> some View { HStack { Text(title); Spacer(); MoneyLabel(cents: cents, style: .subheadline) }.font(Brand.ui(.subheadline)) }
 }
 
 struct BackupDocument: FileDocument {
@@ -305,11 +453,22 @@ struct SettingsView: View {
                     Text("Restored tabs are private copies. Invite people again after restoring. Existing website tabs are separate and are not imported automatically.").font(.caption).foregroundStyle(.secondary)
                     Text("To leave a shared tab, open its iCloud sharing controls. When an owner stops sharing, SettlingUp keeps a private copy for the owner.").font(.caption).foregroundStyle(.secondary)
                 }
+                Section("iCloud status") {
+                    Text(store.cloudAccount)
+                    LabeledContent("Last upload", value: store.lastExport?.formatted() ?? "Not observed this session")
+                    LabeledContent("Last download", value: store.lastImport?.formatted() ?? "Not observed this session")
+                    Button("Check iCloud account") { Task { await store.checkCloudAccount() } }
+                    Text("An upload or download event is not confirmation that another device received a tab.").font(.caption).foregroundStyle(.secondary)
+                    DisclosureGroup("Recent sync events") {
+                        ForEach(Array(store.syncDetails.enumerated()), id: \.offset) { _, detail in Text(detail).font(.caption).textSelection(.enabled) }
+                    }
+                    ShareLink("Share sync diagnostics", item: (["SettlingUp", store.cloudAccount, store.status] + store.syncDetails).joined(separator: "\n"))
+                }
                 Section("Privacy") {
                     Text("Names, expenses, and recorded payments stay on your device and in your Apple iCloud account. People you invite can access the shared tab. SettlingUp does not process payments or include advertising or analytics.")
                     Text("Backups contain your tab data. Store them somewhere private.").font(.caption).foregroundStyle(.secondary)
                 }
-                Section { Text("SettlingUp · 0.1.0 (1)").foregroundStyle(.secondary) }
+                Section { Text("SettlingUp · \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))").foregroundStyle(.secondary) }
             }
             .navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }

@@ -35,6 +35,7 @@ enum Money {
 struct Person: Identifiable, Codable, Equatable {
     var id: UUID = UUID()
     var name: String
+    var order: Int? = nil
 }
 
 enum SplitMode: String, Codable, CaseIterable, Identifiable {
@@ -52,6 +53,7 @@ struct Expense: Identifiable, Codable, Equatable {
     var tax: Int = 0
     var tip: Int = 0
     var bases: [UUID: Int] = [:]
+    var splitRotation: Int? = nil
     var date: Date = Date()
 
     func validate(people: Set<UUID>) throws {
@@ -96,7 +98,7 @@ struct TabSnapshot: Identifiable, Codable, Equatable {
         let identities = Dictionary(uniqueKeysWithValues: people.map { ($0.id, UUID()) })
         var copy = self
         copy.id = UUID()
-        copy.people = people.map { Person(id: identities[$0.id]!, name: $0.name) }
+        copy.people = people.map { Person(id: identities[$0.id]!, name: $0.name, order: $0.order) }
         copy.expenses = expenses.map { expense in
             var result = expense
             result.id = UUID(); result.payer = identities[expense.payer]!
@@ -129,6 +131,17 @@ struct TabSnapshot: Identifiable, Codable, Equatable {
 }
 
 enum Settlement {
+    // The website keeps payment cards visible after marking them paid.
+    static func displayedPayments(_ tab: TabSnapshot, direct: Bool = false) -> [SuggestedPayment] {
+        var expensesOnly = tab
+        expensesOnly.transfers = []
+        return direct ? self.direct(expensesOnly) : smart(expensesOnly)
+    }
+
+    static func markedPayment(_ payment: SuggestedPayment, in tab: TabSnapshot) -> Transfer? {
+        tab.transfers.first { $0.from == payment.from && $0.to == payment.to && abs($0.cents - payment.cents) <= 1 }
+    }
+
     static func paymentID(_ payment: SuggestedPayment, tab: TabSnapshot) -> UUID {
         // Two people recording the same suggestion from the same ledger create one logical payment.
         var parts = [tab.id.uuidString, payment.from.uuidString, payment.to.uuidString, String(payment.cents)]
@@ -145,15 +158,15 @@ enum Settlement {
         return UUID(uuidString: groups.joined(separator: "-"))!
     }
 
-    static func even(cents: Int, people: [UUID]) throws -> [UUID: Int] {
+    static func even(cents: Int, people: [UUID], rotation: Int = 0) throws -> [UUID: Int] {
         guard cents >= 0, cents <= Money.maximum, !people.isEmpty,
               Set(people).count == people.count else { throw TabError.invalid("Choose who is splitting this expense.") }
         return Dictionary(uniqueKeysWithValues: people.enumerated().map {
-            ($0.element, cents / people.count + ($0.offset < cents % people.count ? 1 : 0))
+            ($0.element, cents / people.count + ((($0.offset + abs(rotation % people.count)) % people.count) < cents % people.count ? 1 : 0))
         })
     }
 
-    static func custom(bases: [UUID: Int], tax: Int, tip: Int) throws -> [UUID: Int] {
+    static func custom(bases: [UUID: Int], tax: Int, tip: Int, people: [UUID] = []) throws -> [UUID: Int] {
         guard !bases.isEmpty, bases.values.allSatisfy({ $0 >= 0 && $0 <= Money.maximum }),
               tax >= 0, tip >= 0, tax <= Money.maximum, tip <= Money.maximum else {
             throw TabError.invalid("Enter valid custom amounts, tax and tip.")
@@ -166,7 +179,9 @@ enum Settlement {
         let ranked = bases.keys.sorted {
             let left = Int64(bases[$0]!) * Int64(extras) % Int64(total)
             let right = Int64(bases[$1]!) * Int64(extras) % Int64(total)
-            return left == right ? $0.uuidString < $1.uuidString : left > right
+            if left != right { return left > right }
+            let first = people.firstIndex(of: $0) ?? Int.max, second = people.firstIndex(of: $1) ?? Int.max
+            return first == second ? $0.uuidString < $1.uuidString : first < second
         }
         var result = bases.mapValues { $0 + Int(Int64($0) * Int64(extras) / Int64(total)) }
         let remainder = total + extras - result.values.reduce(0, +)
@@ -189,7 +204,7 @@ enum Settlement {
 
     static func smart(_ tab: TabSnapshot) -> [SuggestedPayment] {
         var balances = balances(tab)
-        let ids = tab.people.map(\.id).sorted { $0.uuidString < $1.uuidString }
+        let ids = tab.people.map(\.id)
         var payments: [SuggestedPayment] = []
         while let debtor = ids.filter({ balances[$0, default: 0] < 0 }).min(by: { balances[$0]! < balances[$1]! }),
               let creditor = ids.filter({ balances[$0, default: 0] > 0 }).max(by: { balances[$0]! < balances[$1]! }) {
@@ -224,4 +239,50 @@ enum Settlement {
         }
         return result
     }
+}
+
+
+struct DemoScenario: Decodable, Identifiable {
+    struct DemoPerson: Decodable { let id: Int; let name: String }
+    struct DemoExpense: Decodable {
+        let id: Int; let desc: String; let amount: Double; let paidBy: Int
+        let splitType: String; let splitWith: [Int]; let splitAmounts: [String: Double]?
+    }
+    let title: String
+    let icon: String
+    let people: [DemoPerson]
+    let expenses: [DemoExpense]
+    var id: String { title }
+
+    func snapshot() throws -> TabSnapshot {
+        let people = people.enumerated().map { Person(name: $0.element.name, order: $0.offset) }
+        let ids = Dictionary(uniqueKeysWithValues: zip(self.people.map(\.id), people.map(\.id)))
+        var tab = TabSnapshot(name: "DEMO: " + title, people: people)
+        for (index, source) in expenses.enumerated() {
+            let cents = Int((source.amount * 100).rounded())
+            let included = try source.splitWith.map { value -> UUID in
+                guard let id = ids[value] else { throw TabError.invalid("Invalid demo participant") }; return id
+            }
+            let shares: [UUID: Int]
+            if let amounts = source.splitAmounts {
+                shares = Dictionary(uniqueKeysWithValues: try amounts.map { key, value in
+                    guard let numeric = Int(key), let id = ids[numeric] else { throw TabError.invalid("Invalid demo split") }
+                    return (id, Int((value * 100).rounded()))
+                })
+            } else { shares = try Settlement.even(cents: cents, people: included, rotation: source.id) }
+            guard let payer = ids[source.paidBy] else { throw TabError.invalid("Invalid demo payer") }
+            let mode: SplitMode = source.splitType == "custom" ? .custom : source.splitType == "personal" ? .personal : .even
+            tab.expenses.append(Expense(title: source.desc, payer: payer, cents: cents, shares: shares, mode: mode,
+                                        bases: mode == .custom ? shares : [:], splitRotation: source.id,
+                                        date: Date().addingTimeInterval(Double(index))))
+        }
+        try tab.validate()
+        return tab
+    }
+
+    // Copied from settlingup-demos.js so the native examples exercise the original scenarios.
+    static let bundledJSON = #"""
+[{"title":"Bach Party Vegas","icon":"🥂","color":"rgba(155,69,186,0.18)","people":[{"id":0,"name":"Jordan"},{"id":1,"name":"Taylor"},{"id":2,"name":"Morgan"},{"id":3,"name":"Riley"},{"id":4,"name":"Casey"},{"id":5,"name":"Avery"},{"id":6,"name":"Quinn"},{"id":7,"name":"Blake"},{"id":8,"name":"Sage"},{"id":9,"name":"Drew"},{"id":10,"name":"Reese"},{"id":11,"name":"Alex"}],"expenses":[{"id":0,"desc":"Airbnb — 2 nights","amount":1440,"paidBy":0,"splitType":"even","splitWith":[0,1,2,3,4,5,6,7,8,9,10,11],"splitAmounts":null},{"id":1,"desc":"Matching sashes & accessories","amount":156,"paidBy":1,"splitType":"even","splitWith":[0,1,2,3,4,5,6,7,8,9,10],"splitAmounts":null},{"id":2,"desc":"Drag brunch tickets","amount":480,"paidBy":2,"splitType":"even","splitWith":[0,1,2,3,4,5,6,7,8,9,10,11],"splitAmounts":null},{"id":3,"desc":"Pool party cabana","amount":350,"paidBy":0,"splitType":"even","splitWith":[0,1,2,3,4,5,6,7,8,9,10,11],"splitAmounts":null},{"id":4,"desc":"Dinner — steakhouse","amount":892.5,"paidBy":3,"splitType":"custom","splitWith":[0,1,2,3,4,5,6,7,8,9,10,11],"splitAmounts":{"0":72,"1":68.5,"2":95,"3":55,"4":88,"5":72,"6":65,"7":90,"8":55,"9":78,"10":68,"11":86}},{"id":5,"desc":"Nightclub entry + bottle","amount":1200,"paidBy":4,"splitType":"even","splitWith":[0,1,2,3,4,5,6,7,8,9,10,11],"splitAmounts":null},{"id":6,"desc":"Ubers — night out (x4 cars)","amount":148,"paidBy":5,"splitType":"even","splitWith":[0,1,2,3,4,5,6,7,8,9,10,11],"splitAmounts":null},{"id":7,"desc":"Brunch Day 2","amount":320,"paidBy":6,"splitType":"even","splitWith":[0,1,2,3,4,5,6,7,8,9,10,11],"splitAmounts":null},{"id":8,"desc":"Honouree's flight contribution","amount":300,"paidBy":7,"splitType":"even","splitWith":[0,1,2,3,4,5,6,7,8,9,10],"splitAmounts":null},{"id":9,"desc":"Spa treatments","amount":660,"paidBy":8,"splitType":"even","splitWith":[0,2,4,6,8,10],"splitAmounts":null},{"id":10,"desc":"Cocktail making class","amount":420,"paidBy":9,"splitType":"even","splitWith":[0,1,2,3,4,5,6,7,8,9,10,11],"splitAmounts":null},{"id":11,"desc":"Late-night snacks & drinks","amount":185,"paidBy":10,"splitType":"even","splitWith":[0,1,2,3,4,5,6,7,8,9,10,11],"splitAmounts":null}]},{"title":"Family Beach Trip","icon":"🏖️","color":"rgba(0,212,255,0.12)","people":[{"id":0,"name":"Dad (Mike)"},{"id":1,"name":"Mom (Sarah)"},{"id":2,"name":"Uncle Dave"},{"id":3,"name":"Aunt Linda"},{"id":4,"name":"Grandpa Joe"},{"id":5,"name":"Grandma Sue"},{"id":6,"name":"Cousin Emma"},{"id":7,"name":"Cousin Ryan"}],"expenses":[{"id":0,"desc":"Beach house rental — 7 nights","amount":3500,"paidBy":0,"splitType":"even","splitWith":[0,1,2,3,4,5,6,7],"splitAmounts":null},{"id":1,"desc":"Groceries — week 1","amount":420,"paidBy":1,"splitType":"even","splitWith":[0,1,2,3,4,5,6,7],"splitAmounts":null},{"id":2,"desc":"Boat rental — day trip","amount":680,"paidBy":2,"splitType":"even","splitWith":[0,1,2,3,4,5,6,7],"splitAmounts":null},{"id":3,"desc":"Seafood dinner — night 2","amount":485,"paidBy":3,"splitType":"custom","splitWith":[0,1,2,3,4,5,6,7],"splitAmounts":{"0":72,"1":68,"2":65,"3":58,"4":52,"5":52,"6":60,"7":58}},{"id":4,"desc":"Gas — Mike's car (drove down)","amount":95,"paidBy":0,"splitType":"even","splitWith":[0,1,4,5],"splitAmounts":null},{"id":5,"desc":"Gas — Dave's car","amount":88,"paidBy":2,"splitType":"even","splitWith":[2,3,6,7],"splitAmounts":null},{"id":6,"desc":"Kayak & paddleboard rentals","amount":240,"paidBy":6,"splitType":"even","splitWith":[0,1,2,3,6,7],"splitAmounts":null},{"id":7,"desc":"Mini golf","amount":120,"paidBy":7,"splitType":"even","splitWith":[0,1,2,3,6,7],"splitAmounts":null},{"id":8,"desc":"Ice cream — daily runs","amount":85,"paidBy":4,"splitType":"even","splitWith":[0,1,2,3,4,5,6,7],"splitAmounts":null},{"id":9,"desc":"Aquarium tickets","amount":210,"paidBy":5,"splitType":"even","splitWith":[0,1,2,3,4,5,6,7],"splitAmounts":null},{"id":10,"desc":"Farewell dinner — nice restaurant","amount":620,"paidBy":0,"splitType":"custom","splitWith":[0,1,2,3,4,5,6,7],"splitAmounts":{"0":90,"1":85,"2":82,"3":78,"4":70,"5":70,"6":75,"7":70}},{"id":11,"desc":"Sunscreen & beach supplies","amount":68,"paidBy":1,"splitType":"even","splitWith":[0,1,2,3,4,5,6,7],"splitAmounts":null}]},{"title":"Date Night Out","icon":"🍷","color":"rgba(224,90,90,0.15)","people":[{"id":0,"name":"Sam"},{"id":1,"name":"Jamie"},{"id":2,"name":"Chris"},{"id":3,"name":"Pat"},{"id":4,"name":"Nico"},{"id":5,"name":"Mel"}],"expenses":[{"id":0,"desc":"Uber to dinner","amount":28.5,"paidBy":0,"splitType":"even","splitWith":[0,1,2,3,4,5],"splitAmounts":null},{"id":1,"desc":"Dinner — Osteria","amount":396.8,"paidBy":1,"splitType":"custom","splitWith":[0,1,2,3,4,5],"splitAmounts":{"0":58.88,"1":74.24,"2":66.56,"3":58.88,"4":69.12,"5":69.12}},{"id":2,"desc":"Wine — bottle at dinner","amount":95,"paidBy":2,"splitType":"even","splitWith":[0,1,2,3,4,5],"splitAmounts":null},{"id":3,"desc":"Bowling — shoes & games","amount":132,"paidBy":3,"splitType":"even","splitWith":[0,1,2,3,4,5],"splitAmounts":null},{"id":4,"desc":"Drinks at the bar","amount":148,"paidBy":4,"splitType":"even","splitWith":[0,1,2,3,4,5],"splitAmounts":null},{"id":5,"desc":"Uber home","amount":34,"paidBy":5,"splitType":"even","splitWith":[0,1,2,3,4,5],"splitAmounts":null},{"id":6,"desc":"Late-night pizza slice","amount":42,"paidBy":0,"splitType":"even","splitWith":[0,1,2,3,4,5],"splitAmounts":null}]}]
+"""#
+    static var all: [DemoScenario] { (try? JSONDecoder().decode([DemoScenario].self, from: Data(bundledJSON.utf8))) ?? [] }
 }

@@ -6,6 +6,14 @@ Bundle ID: `com.erdabolabs.SettlingUp` · App Store Connect ID: `6828948001`
 
 [Open TestFlight management](https://appstoreconnect.apple.com/apps/6828948001/testflight)
 
+## Corrective beta — November 11, 2026
+
+Version **0.1.0 (2)** has been archived, distribution-exported, verified and uploaded successfully with owner authorization. Apple processing / Personal group assignment is being checked. See [build 2 test notes](BUILD-2-TEST-NOTES.md).
+
+This beta restores the original expense/split/settlement workflows and bundled font weights. **Production iCloud sync/sharing remains a known unresolved issue**, with additional diagnostics provided. This upload is for internal owner testing, not a public release or confirmation that cloud collaboration works. Update the existing installation to preserve local tabs.
+
+Validation: 30 local tests passed; Release archive/export succeeded; signed package has Production iCloud/APNs, intended bundle/container, debugger disabled, all five registered fonts, encryption exemption, and no DEBUG diagnostic fixture. Existing owner signing configuration was retained.
+
 ## First upload — October 30, 2026
 
 Version **0.1.0**, build **1** was uploaded successfully for **internal testing only**. Apple completed processing; the **Personal** group has **1 Tester · 1 Build**, and build 1 is **Testing**. The owner account is the sole tester. Automatic distribution of future builds is disabled. This is not a public App Store submission.

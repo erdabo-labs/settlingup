@@ -5,6 +5,8 @@ struct ExpenseEditor: View {
     @Environment(\.dismiss) private var dismiss
     let tab: TabSnapshot
     let original: Expense?
+    var inline = false
+    var onSaved: (() -> Void)?
     @State private var title: String
     @State private var amount: String
     @State private var payer: UUID
@@ -15,15 +17,18 @@ struct ExpenseEditor: View {
     @State private var tax: String
     @State private var tip: String
     @State private var error: String?
+    @State private var topDriven = true
 
-    init(tab: TabSnapshot, original: Expense? = nil) {
-        self.tab = tab; self.original = original
+    init(tab: TabSnapshot, original: Expense? = nil, inline: Bool = false, onSaved: (() -> Void)? = nil) {
+        self.tab = tab; self.original = original; self.inline = inline; self.onSaved = onSaved
         let first = tab.people.first?.id ?? UUID()
+        let lastPayer = UserDefaults.standard.string(forKey: "payer-\(tab.id)").flatMap(UUID.init(uuidString:))
+        _topDriven = State(initialValue: original == nil)
         _title = State(initialValue: original?.title ?? "")
-        _amount = State(initialValue: original.map { Money.input($0.cents - $0.tax - $0.tip) } ?? "")
-        _payer = State(initialValue: original?.payer ?? first)
+        _amount = State(initialValue: original.map { Money.input($0.cents) } ?? "")
+        _payer = State(initialValue: original?.payer ?? (tab.people.contains { $0.id == lastPayer } ? lastPayer! : first))
         _included = State(initialValue: original.map { Set($0.shares.keys) } ?? Set(tab.people.map(\.id)))
-        _mode = State(initialValue: original?.mode ?? .even)
+        _mode = State(initialValue: original?.mode ?? SplitMode(rawValue: UserDefaults.standard.string(forKey: "split-\(tab.id)") ?? "") ?? .even)
         _personal = State(initialValue: original?.shares.keys.first ?? first)
         _custom = State(initialValue: (original?.bases.isEmpty == false ? original!.bases : original?.shares ?? [:]).mapValues(Money.input))
         _tax = State(initialValue: original.map { Money.input($0.tax) } ?? "")
@@ -31,85 +36,168 @@ struct ExpenseEditor: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Expense") {
-                    TextField("What was it for?", text: $title).textInputAutocapitalization(.sentences)
-                    Picker("Paid by", selection: $payer) { ForEach(tab.people) { Text($0.name).tag($0.id) } }
-                    Picker("Split", selection: $mode) { ForEach(SplitMode.allCases) { Text($0.rawValue).tag($0) } }
+        Group {
+            if inline { form }
+            else {
+                NavigationStack {
+                    ScrollView { form.padding().frame(maxWidth: 480).frame(maxWidth: .infinity) }.background(Brand.background)
+                        .navigationTitle("Edit expense").navigationBarTitleDisplayMode(.inline)
+                        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
                 }
-                Section {
-                    if mode == .custom {
-                        ForEach(tab.people) { person in
-                            HStack {
-                                Text(person.name)
-                                Spacer(minLength: 12)
-                                TextField("0.00", text: Binding(get: { custom[person.id] ?? "" }, set: { custom[person.id] = $0 }))
-                                    .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(minWidth: 80)
-                                    .accessibilityLabel("\(person.name)'s amount")
-                            }
-                        }
-                    } else {
-                        LabeledContent("Amount (USD)") { TextField("0.00", text: $amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing).accessibilityLabel("Amount in US dollars") }
-                    }
-                    LabeledContent("Tax") { TextField("0.00", text: $tax).keyboardType(.decimalPad).multilineTextAlignment(.trailing).accessibilityLabel("Tax amount") }
-                    LabeledContent("Tip") { TextField("0.00", text: $tip).keyboardType(.decimalPad).multilineTextAlignment(.trailing).accessibilityLabel("Tip amount") }
-                } header: { Text(mode == .custom ? "Each person's amount (USD)" : "Amounts") } footer: {
-                    Text(mode == .custom ? "Tax and tip are allocated proportionally, exactly to the cent." : "Tax and tip are added to the amount before splitting.")
-                }
-                if mode == .even {
-                    Section("Split between") {
-                        ForEach(tab.people) { person in
-                            Toggle(person.name, isOn: Binding(get: { included.contains(person.id) }, set: { value in
-                                if value { included.insert(person.id) } else { included.remove(person.id) }
-                            }))
-                        }
-                    }
-                } else if mode == .personal {
-                    Section { Picker("For", selection: $personal) { ForEach(tab.people) { Text($0.name).tag($0.id) } } } header: { Text("Who owes this expense?") }
-                }
-                if let expense = try? draft() {
-                    Section("Preview") {
-                        HStack { Text("Total"); Spacer(); MoneyLabel(cents: expense.cents) }
-                        ForEach(tab.people.filter { expense.shares[$0.id] != nil }) { person in
-                            HStack { Text(person.name); Spacer(); MoneyLabel(cents: expense.shares[person.id] ?? 0) }
-                        }
-                    }
-                }
-                if let error { Section { Text(error).foregroundStyle(.red).accessibilityAddTraits(.updatesFrequently) } }
-            }
-            .navigationTitle(original == nil ? "Add expense" : "Edit expense").navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        do { try store.save(draft(), tabID: tab.id, original: original); dismiss() }
-                        catch { self.error = error.localizedDescription }
-                    }
-                }
-                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) } }
             }
         }
+        .font(Brand.ui())
+        .toolbar { ToolbarItemGroup(placement: .keyboard) {
+            Spacer(); Button("Done") { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+        } }
     }
 
-    private func draft() throws -> Expense {
-        let tax = try Money.parse(tax.isEmpty ? "0" : tax), tip = try Money.parse(tip.isEmpty ? "0" : tip)
-        var shares: [UUID: Int], bases: [UUID: Int] = [:]
-        let cents: Int
-        if mode == .custom {
-            for person in tab.people {
-                let text = custom[person.id] ?? ""
-                bases[person.id] = try Money.parse(text.isEmpty ? "0" : text)
+    private func name(_ person: Person) -> String {
+        UserDefaults.standard.string(forKey: "identity-\(tab.id)") == person.id.uuidString ? "You" : person.name
+    }
+    private var form: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(original == nil ? "NEW EXPENSE" : "EDITING EXPENSE").font(Brand.ui(.caption, weight: .semibold)).foregroundStyle(.secondary)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 10) { descriptionField; amountField.frame(width: 112) }
+                VStack(alignment: .leading, spacing: 10) { descriptionField; amountField }
             }
-            shares = try Settlement.custom(bases: bases, tax: tax, tip: tip)
-            cents = shares.values.reduce(0, +)
-        } else {
-            cents = try Money.parse(amount) + tax + tip
-            let ids = mode == .personal ? [personal] : tab.people.filter { included.contains($0.id) }.map(\.id)
-            shares = try Settlement.even(cents: cents, people: ids)
+            Text("WHO PAID?").font(Brand.ui(.caption)).foregroundStyle(.secondary)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 105))], spacing: 8) {
+                ForEach(tab.people) { person in PersonPill(name: name(person), selected: payer == person.id) { payer = person.id } }
+            }
+            Divider()
+            Text("HOW TO SPLIT").font(Brand.ui(.caption)).foregroundStyle(.secondary)
+            HStack(spacing: 4) {
+                ForEach(SplitMode.allCases) { option in
+                    Button(option.rawValue) { mode = option }
+                        .buttonStyle(WebSegment(selected: mode == option))
+                }
+            }.accessibilityElement(children: .contain).accessibilityLabel("How to split")
+                .onChange(of: mode) { _, new in
+                    included = Set(tab.people.map(\.id))
+                    if new == .custom { topDriven = true; fillEvenly() }
+                }
+            if mode == .even {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 105))], spacing: 8) {
+                    ForEach(tab.people) { person in
+                        PersonPill(name: name(person), selected: included.contains(person.id)) { toggle(person.id) }
+                    }
+                }
+                if let cents = try? Money.parse(amount), !included.isEmpty {
+                    Text("\(Money.text(cents)) ÷ \(included.count) people · \(Money.text(cents / included.count)) each\(cents % included.count == 0 ? "" : " (extra cents distributed fairly)")")
+                        .font(Brand.ui(.caption)).foregroundStyle(.secondary)
+                }
+            } else if mode == .personal {
+                Text("WHO IS IT FOR?").font(Brand.ui(.caption)).foregroundStyle(.secondary)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 105))], spacing: 8) {
+                    ForEach(tab.people) { person in PersonPill(name: name(person), selected: personal == person.id) { personal = person.id } }
+                }
+            } else {
+                HStack {
+                    Text("PER PERSON").font(Brand.ui(.caption)).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("⚡ Split evenly") { fillEvenly(showError: true); topDriven = false }.font(Brand.ui(.caption)).frame(minHeight: 44)
+                }
+                Text("Tap to include/exclude").font(Brand.ui(.caption)).foregroundStyle(.secondary)
+                ForEach(tab.people) { person in
+                    HStack {
+                        Button { toggle(person.id); custom[person.id] = ""; topDriven = false; updateTotal() } label: {
+                            Image(systemName: included.contains(person.id) ? "checkmark.circle.fill" : "plus.circle")
+                                .frame(width: 44, height: 44)
+                        }.accessibilityLabel("\(included.contains(person.id) ? "Exclude" : "Include") \(person.name)")
+                        Text(name(person)).font(Brand.ui(.subheadline))
+                        Spacer(minLength: 4)
+                        TextField("0.00", text: Binding(get: { custom[person.id] ?? "" }, set: {
+                            custom[person.id] = $0; topDriven = false; updateTotal()
+                        })).keyboardType(.decimalPad).multilineTextAlignment(.trailing).font(Brand.number(.subheadline))
+                            .webInput().frame(width: 100).disabled(!included.contains(person.id))
+                            .accessibilityLabel("\(person.name)'s share before tax and tip")
+                    }.opacity(included.contains(person.id) ? 1 : 0.5)
+                }
+                HStack(spacing: 12) {
+                    extraField("Tax (optional)", text: $tax)
+                    extraField("Tip (optional)", text: $tip)
+                }
+            }
+            if let expense = try? draft(requireTitle: false) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack { Text("Total").font(Brand.ui(.subheadline, weight: .semibold)); Spacer(); MoneyLabel(cents: expense.cents).foregroundStyle(Brand.accent) }
+                    ForEach(tab.people.filter { expense.shares[$0.id] != nil }) { person in
+                        HStack { Text(name(person)); Spacer(); MoneyLabel(cents: expense.shares[person.id] ?? 0, style: .subheadline) }
+                    }
+                }.font(Brand.ui(.subheadline)).padding(.vertical, 6)
+            }
+            if let error { Text(error).font(Brand.ui(.subheadline)).foregroundStyle(.red).accessibilityAddTraits(.updatesFrequently) }
+            Button { save() } label: { Text(original == nil ? "+ Add expense" : "Save changes").frame(maxWidth: .infinity) }.buttonStyle(WebButton())
+        }.webCard().overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Brand.accent))
+    }
+    private var descriptionField: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("DESCRIPTION").font(Brand.ui(.caption)).foregroundStyle(.secondary)
+            TextField("Gas, Dinner, Hotel…", text: $title).textInputAutocapitalization(.sentences).webInput()
         }
-        let expense = Expense(id: original?.id ?? UUID(), title: title.trimmingCharacters(in: .whitespacesAndNewlines), payer: payer, cents: cents, shares: shares, mode: mode, tax: tax, tip: tip, bases: bases, date: original?.date ?? Date())
+    }
+    private var amountField: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("AMOUNT ($)").font(Brand.ui(.caption)).foregroundStyle(.secondary)
+            TextField("0.00", text: Binding(get: { amount }, set: { amount = $0; topDriven = true; if mode == .custom { fillEvenly() } }))
+                .keyboardType(.decimalPad).font(Brand.number()).webInput().accessibilityLabel("Total amount")
+        }
+    }
+    private func extraField(_ label: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label).font(Brand.ui(.caption)).foregroundStyle(.secondary)
+            TextField("0.00", text: Binding(get: { text.wrappedValue }, set: {
+                text.wrappedValue = $0
+                if topDriven { fillEvenly() } else { updateTotal() }
+            })).keyboardType(.decimalPad).font(Brand.number()).webInput().accessibilityLabel(label)
+        }
+    }
+    private func toggle(_ id: UUID) { if included.contains(id) { included.remove(id) } else { included.insert(id) } }
+    private func parsed(_ text: String) throws -> Int { try Money.parse(text.isEmpty ? "0" : text) }
+    private func fillEvenly(showError: Bool = false) {
+        do {
+            let total = try Money.parse(amount)
+            let base = total - (try parsed(tax)) - (try parsed(tip))
+            guard base > 0 else { throw TabError.invalid("The total must be greater than tax and tip.") }
+            custom = try Settlement.even(cents: base, people: tab.people.filter { included.contains($0.id) }.map(\.id)).mapValues(Money.input)
+            error = nil
+        } catch { if showError { self.error = error.localizedDescription } }
+    }
+    private func updateTotal() {
+        do {
+            let values = try tab.people.filter { included.contains($0.id) }.map { try parsed(custom[$0.id] ?? "") }
+            amount = Money.input(values.reduce(0, +) + (try parsed(tax)) + (try parsed(tip)))
+        } catch { /* Keep the user's unfinished input until it becomes a valid amount. */ }
+    }
+    private func draft(requireTitle: Bool = true) throws -> Expense {
+        var shares: [UUID: Int], bases: [UUID: Int] = [:]
+        let cents = try Money.parse(amount)
+        let tax = mode == .custom ? try parsed(tax) : 0
+        let tip = mode == .custom ? try parsed(tip) : 0
+        if mode == .custom {
+            for person in tab.people where included.contains(person.id) { bases[person.id] = try parsed(custom[person.id] ?? "") }
+            shares = try Settlement.custom(bases: bases, tax: tax, tip: tip, people: tab.people.map(\.id))
+            guard shares.values.reduce(0, +) == cents else { throw TabError.invalid("Per-person amounts, tax and tip must match the total. Tap Split evenly or adjust the amounts.") }
+        } else {
+            let ids = mode == .personal ? [personal] : tab.people.filter { included.contains($0.id) }.map(\.id)
+            shares = try Settlement.even(cents: cents, people: ids, rotation: original?.splitRotation ?? (original == nil ? tab.expenses.count : 0))
+        }
+        let expense = Expense(id: original?.id ?? UUID(), title: requireTitle ? title.trimmingCharacters(in: .whitespacesAndNewlines) : "Preview", payer: payer, cents: cents, shares: shares, mode: mode, tax: tax, tip: tip, bases: bases, splitRotation: original?.splitRotation ?? (original == nil ? tab.expenses.count : 0), date: original?.date ?? Date())
         try expense.validate(people: Set(tab.people.map(\.id)))
         return expense
+    }
+    private func save() {
+        do {
+            try store.save(draft(), tabID: tab.id, original: original)
+            UserDefaults.standard.set(payer.uuidString, forKey: "payer-\(tab.id)")
+            UserDefaults.standard.set(mode.rawValue, forKey: "split-\(tab.id)")
+            error = nil
+            if inline {
+                title = ""; amount = ""; custom = [:]; tax = ""; tip = ""
+                included = Set(tab.people.map(\.id)); onSaved?()
+            } else { dismiss() }
+        } catch { self.error = error.localizedDescription }
     }
 }

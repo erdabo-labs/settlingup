@@ -15,8 +15,23 @@ struct SettlingUpApp: App {
         #else
         let local = ProcessInfo.processInfo.arguments.contains("--local-only")
         #endif
-        let store = TabStore(cloud: !testing && !preview && !local, inMemory: testing || preview)
+        var diagnosticDirectory: URL?
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--cloud-diagnostic") {
+            diagnosticDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("SettlingUp-CloudDiagnostic")
+        }
+        #endif
+        let store = TabStore(directory: diagnosticDirectory, cloud: !testing && !preview && !local, inMemory: testing || preview)
+        #if DEBUG
+        if diagnosticDirectory != nil && store.tabs.isEmpty {
+            do {
+                let id = try store.create(name: "Cloud sync diagnostic", names: ["Test A", "Test B"])
+                let people = store.tabs.first!.people
+                try store.save(Expense(title: "Diagnostic expense", payer: people[0].id, cents: 1000,
+                                       shares: try Settlement.even(cents: 1000, people: people.map(\.id)), mode: .even), tabID: id)
+                print("SettlingUp diagnostic fixture saved in isolated local store.")
+            } catch { print("SettlingUp diagnostic save failed: \(error)") }
+        }
         let initializeSchema = ProcessInfo.processInfo.arguments.contains("--initialize-cloud-schema")
         if initializeSchema || ProcessInfo.processInfo.arguments.contains("--print-cloud-schema") {
             do {
