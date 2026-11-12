@@ -14,6 +14,16 @@
 - `[?]` — blocked / needs owner decision
 - `[-]` — won't do / deprioritized
 
+## Native iPhone migration — approved October 29, 2026
+
+### [~] Local-first native app with iCloud collaboration
+**Branch:** `feature/native-ios-icloud`
+**Scope:** SwiftUI iPhone app, local Core Data persistence, private/shared CloudKit stores, native invitations, expense splits, settlement ledger, backup/restore, adaptive Duo layouts.
+**Implemented:** Native project and local functionality; iCloud integration code; setup, privacy and store-listing drafts. See `settlingup-ios/README.md`.
+**October 30 update:** App/container registered, production CloudKit schema deployed, manual distribution signing configured, and owner-authorized 0.1.0 (1) uploaded. Personal internal TestFlight group shows 1 tester, 1 build, Testing. See `settlingup-ios/docs/TESTFLIGHT.md`.
+**Remaining release gates:** Validate with two iCloud accounts and complete physical-device/accessibility checks before broader release. Website/Supabase retirement and old-tab migration are separate decisions.
+**November 11 repair update:** Phone error confirms missing `cloudkit.share` in Production; Development is also missing that type. Creating the Development share is blocked by simulator Apple Account Verification, deferred by the owner. Further rounding/form/persistence repairs have 38 passing local tests. Production sync, two-account sharing and complete Duo/accessibility QA remain unverified. Details: `settlingup-ios/docs/PARITY-REPAIR.md`.
+
 ---
 
 ## All P1 + P2 complete ✅

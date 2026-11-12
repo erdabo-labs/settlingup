@@ -3,6 +3,12 @@
 This document tells the agent how to work on this project. Read it before doing anything
 else. Read MISSION.md and BACKLOG.md too.
 
+## Approved native direction — October 29, 2026
+
+The owner approved a native iPhone app with local storage and Apple iCloud sharing for iPhone/iCloud users. Native code lives in `settlingup-ios/`; SwiftUI, Core Data and CloudKit are authorized there. The single-file/vanilla-JS/CDN restrictions below continue to govern the existing website. The native app keeps the cyan branding and existing font choices, bundling the fonts for offline use. Native layouts adapt beyond the website's 480px shell for the folding iPhone Duo.
+
+Use the existing Flipbook project only as an architectural reference. Keep the website, Supabase data and shared web links operational during native development. Do not deploy, upload to TestFlight, change backend policies, retire services or migrate production data without owner approval. Native setup and outstanding release checks are tracked in `settlingup-ios/docs/RELEASE.md`.
+
 ---
 
 ## Your Role

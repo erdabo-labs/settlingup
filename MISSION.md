@@ -1,5 +1,9 @@
 # SettlingUp — Mission & Operating Principles
 
+## Native iPhone direction — approved October 29, 2026
+
+Build a simple native app for the owner and friends. On-device persistence and Apple iCloud sharing replace the native app's need for Supabase/Vercel. iPhone/iCloud-only collaboration is acceptable; broad cross-platform growth and monetization are not goals of this migration. Distribute through TestFlight first, with public App Store release optional after verification. The existing web service described below stays operational and unchanged during development. Its technology constraints apply to the website, not the separately approved SwiftUI/Core Data/CloudKit target.
+
 ## What This App Is
 
 SettlingUp is a zero-friction expense splitting web app. No accounts, no downloads, no
