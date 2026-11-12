@@ -9,10 +9,10 @@ struct ExpenseEditor: View {
     var onSaved: (() -> Void)?
     @State private var title: String
     @State private var amount: String
-    @State private var payer: UUID
+    @State private var payer: UUID?
     @State private var included: Set<UUID>
     @State private var mode: SplitMode
-    @State private var personal: UUID
+    @State private var personal: UUID?
     @State private var custom: [UUID: String]
     @State private var tax: String
     @State private var tip: String
@@ -21,15 +21,14 @@ struct ExpenseEditor: View {
 
     init(tab: TabSnapshot, original: Expense? = nil, inline: Bool = false, onSaved: (() -> Void)? = nil) {
         self.tab = tab; self.original = original; self.inline = inline; self.onSaved = onSaved
-        let first = tab.people.first?.id ?? UUID()
         let lastPayer = UserDefaults.standard.string(forKey: "payer-\(tab.id)").flatMap(UUID.init(uuidString:))
         _topDriven = State(initialValue: original == nil)
         _title = State(initialValue: original?.title ?? "")
         _amount = State(initialValue: original.map { Money.input($0.cents) } ?? "")
-        _payer = State(initialValue: original?.payer ?? (tab.people.contains { $0.id == lastPayer } ? lastPayer! : first))
+        _payer = State(initialValue: original?.payer ?? (tab.people.contains { $0.id == lastPayer } ? lastPayer : nil))
         _included = State(initialValue: original.map { Set($0.shares.keys) } ?? Set(tab.people.map(\.id)))
         _mode = State(initialValue: original?.mode ?? SplitMode(rawValue: UserDefaults.standard.string(forKey: "split-\(tab.id)") ?? "") ?? .even)
-        _personal = State(initialValue: original?.shares.keys.first ?? first)
+        _personal = State(initialValue: original?.mode == .personal ? original?.shares.keys.first : nil)
         _custom = State(initialValue: (original?.bases.isEmpty == false ? original!.bases : original?.shares ?? [:]).mapValues(Money.input))
         _tax = State(initialValue: original.map { Money.input($0.tax) } ?? "")
         _tip = State(initialValue: original.map { Money.input($0.tip) } ?? "")
@@ -162,6 +161,7 @@ struct ExpenseEditor: View {
             let base = total - (try parsed(tax)) - (try parsed(tip))
             guard base > 0 else { throw TabError.invalid("The total must be greater than tax and tip.") }
             custom = try Settlement.even(cents: base, people: tab.people.filter { included.contains($0.id) }.map(\.id)).mapValues(Money.input)
+            topDriven = false
             error = nil
         } catch { if showError { self.error = error.localizedDescription } }
     }
@@ -172,16 +172,21 @@ struct ExpenseEditor: View {
         } catch { /* Keep the user's unfinished input until it becomes a valid amount. */ }
     }
     private func draft(requireTitle: Bool = true) throws -> Expense {
+        guard let payer = payer ?? (requireTitle ? nil : tab.people.first?.id) else { throw TabError.invalid("Select who paid.") }
         var shares: [UUID: Int], bases: [UUID: Int] = [:]
         let cents = try Money.parse(amount)
         let tax = mode == .custom ? try parsed(tax) : 0
         let tip = mode == .custom ? try parsed(tip) : 0
         if mode == .custom {
-            for person in tab.people where included.contains(person.id) { bases[person.id] = try parsed(custom[person.id] ?? "") }
+            for person in tab.people where included.contains(person.id) {
+                let base = try parsed(custom[person.id] ?? "")
+                if base > 0 { bases[person.id] = base }
+            }
             shares = try Settlement.custom(bases: bases, tax: tax, tip: tip, people: tab.people.map(\.id))
             guard shares.values.reduce(0, +) == cents else { throw TabError.invalid("Per-person amounts, tax and tip must match the total. Tap Split evenly or adjust the amounts.") }
         } else {
-            let ids = mode == .personal ? [personal] : tab.people.filter { included.contains($0.id) }.map(\.id)
+            if mode == .personal && personal == nil { throw TabError.invalid("Select who this is for.") }
+            let ids = mode == .personal ? [personal!] : tab.people.filter { included.contains($0.id) }.map(\.id)
             shares = try Settlement.even(cents: cents, people: ids, rotation: original?.splitRotation ?? (original == nil ? tab.expenses.count : 0))
         }
         let expense = Expense(id: original?.id ?? UUID(), title: requireTitle ? title.trimmingCharacters(in: .whitespacesAndNewlines) : "Preview", payer: payer, cents: cents, shares: shares, mode: mode, tax: tax, tip: tip, bases: bases, splitRotation: original?.splitRotation ?? (original == nil ? tab.expenses.count : 0), date: original?.date ?? Date())
@@ -190,13 +195,14 @@ struct ExpenseEditor: View {
     }
     private func save() {
         do {
-            try store.save(draft(), tabID: tab.id, original: original)
-            UserDefaults.standard.set(payer.uuidString, forKey: "payer-\(tab.id)")
+            let expense = try draft()
+            try store.save(expense, tabID: tab.id, original: original)
+            UserDefaults.standard.set(expense.payer.uuidString, forKey: "payer-\(tab.id)")
             UserDefaults.standard.set(mode.rawValue, forKey: "split-\(tab.id)")
             error = nil
             if inline {
                 title = ""; amount = ""; custom = [:]; tax = ""; tip = ""
-                included = Set(tab.people.map(\.id)); onSaved?()
+                included = Set(tab.people.map(\.id)); personal = nil; topDriven = true; onSaved?()
             } else { dismiss() }
         } catch { self.error = error.localizedDescription }
     }

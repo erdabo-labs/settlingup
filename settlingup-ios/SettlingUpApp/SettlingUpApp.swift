@@ -10,6 +10,11 @@ struct SettlingUpApp: App {
     init() {
         let testing = ProcessInfo.processInfo.environment["SETTLINGUP_TESTING"] == "1" || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         let preview = ProcessInfo.processInfo.arguments.contains("--sample-data")
+        #if DEBUG
+        let sharingSchema = ProcessInfo.processInfo.arguments.contains("--initialize-sharing-schema")
+        #else
+        let sharingSchema = false
+        #endif
         #if targetEnvironment(simulator)
         let local = !ProcessInfo.processInfo.arguments.contains("--enable-cloud")
         #else
@@ -21,8 +26,20 @@ struct SettlingUpApp: App {
             diagnosticDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("SettlingUp-CloudDiagnostic")
         }
         #endif
-        let store = TabStore(directory: diagnosticDirectory, cloud: !testing && !preview && !local, inMemory: testing || preview)
+        let store = TabStore(directory: diagnosticDirectory, cloud: !testing && !preview && !local && !sharingSchema, inMemory: testing || preview || sharingSchema)
         #if DEBUG
+        if sharingSchema {
+            Task {
+                do {
+                    let database = CKContainer(identifier: TabStore.cloudIdentifier).privateCloudDatabase
+                    let zone = try await database.save(CKRecordZone(zoneName: "SettlingUpDevelopmentSharingDiagnostic"))
+                    let share = CKShare(recordZoneID: zone.zoneID)
+                    share.publicPermission = .none
+                    let saved = try await database.save(share) as? CKShare
+                    print("SettlingUp sharing schema diagnostic saved; URL available: \(saved?.url != nil)")
+                } catch { print("SettlingUp sharing schema diagnostic failed: " + TabStore.describe(error)) }
+            }
+        }
         if diagnosticDirectory != nil && store.tabs.isEmpty {
             do {
                 let id = try store.create(name: "Cloud sync diagnostic", names: ["Test A", "Test B"])
@@ -101,7 +118,7 @@ struct CloudSharingView: UIViewControllerRepresentable {
         init(shared: SharedTab, store: TabStore) { self.shared = shared; self.store = store }
         func itemTitle(for controller: UICloudSharingController) -> String? { shared.share[CKShare.SystemFieldKey.title] as? String }
         func cloudSharingController(_ controller: UICloudSharingController, failedToSaveShareWithError error: Error) {
-            store.error = "Could not save the iCloud invitation: \(error.localizedDescription)"
+            store.error = "Could not save the iCloud invitation: \(TabStore.describe(error))"
         }
         func cloudSharingControllerDidSaveShare(_ controller: UICloudSharingController) {
             if let share = controller.share { store.persist(share, store: shared.store) }

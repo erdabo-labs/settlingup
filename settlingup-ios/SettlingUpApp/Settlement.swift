@@ -15,7 +15,7 @@ enum Money {
         let separator = Locale.current.decimalSeparator ?? "."
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: separator, with: ".")
-        guard normalized.range(of: #"^\d{1,7}(\.\d{1,2})?$"#, options: .regularExpression) != nil,
+        guard normalized.range(of: #"^(?:\d{1,7}(?:\.\d{0,2})?|\.\d{1,2})$"#, options: .regularExpression) != nil,
               let decimal = Decimal(string: normalized, locale: Locale(identifier: "en_US_POSIX")) else {
             throw TabError.invalid("Enter an amount with up to two decimal places.")
         }
@@ -29,6 +29,23 @@ enum Money {
     static func input(_ cents: Int) -> String {
         String(format: "%.2f", Double(cents) / 100)
             .replacingOccurrences(of: ".", with: Locale.current.decimalSeparator ?? ".")
+    }
+}
+
+enum WebsiteTab {
+    static func url(for input: String) throws -> URL {
+        let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.range(of: #"^[A-Za-z0-9]{4,12}$"#, options: .regularExpression) != nil {
+            return URL(string: "https://www.settlingup.app/t/" + text)!
+        }
+        guard let url = URL(string: text), url.scheme == "https",
+              ["settlingup.app", "www.settlingup.app"].contains(url.host?.lowercased() ?? ""),
+              url.user == nil, url.password == nil, url.port == nil,
+              (url.path.range(of: #"^/t/[A-Za-z0-9]{4,12}/?$"#, options: .regularExpression) != nil ||
+               ((url.path.isEmpty || url.path == "/") && url.fragment?.range(of: #"^v2\.[A-Za-z0-9_-]+$"#, options: .regularExpression) != nil)) else {
+            throw TabError.invalid("Enter a website tab code or a settlingup.app tab link.")
+        }
+        return url
     }
 }
 
@@ -175,17 +192,41 @@ enum Settlement {
         guard total > 0, total + tax + tip <= Money.maximum else {
             throw TabError.invalid("Custom amounts must total more than zero and at most $1,000,000 including tax and tip.")
         }
-        let extras = tax + tip
-        let ranked = bases.keys.sorted {
-            let left = Int64(bases[$0]!) * Int64(extras) % Int64(total)
-            let right = Int64(bases[$1]!) * Int64(extras) % Int64(total)
-            if left != right { return left > right }
-            let first = people.firstIndex(of: $0) ?? Int.max, second = people.firstIndex(of: $1) ?? Int.max
-            return first == second ? $0.uuidString < $1.uuidString : first < second
+        // Match index.html: round each share, then correct the largest fraction.
+        // Dollar operations preserve the website's observable floating-point tie order.
+        let ordered = people.filter { bases[$0] != nil } + bases.keys.filter { !people.contains($0) }.sorted { $0.uuidString < $1.uuidString }
+        let subtotal = ordered.reduce(0.0) { $0 + Double(bases[$1]!) / 100 }
+        let extras = Double(tax) / 100 + Double(tip) / 100
+        var fractions: [UUID: Double] = [:]
+        var result: [UUID: Int] = [:]
+        for id in ordered {
+            let base = Double(bases[id]!) / 100
+            let share = base + (base / subtotal) * extras
+            fractions[id] = share - floor(share * 100) / 100
+            result[id] = Int(floor(share * 100 + 0.5))
         }
-        var result = bases.mapValues { $0 + Int(Int64($0) * Int64(extras) / Int64(total)) }
-        let remainder = total + extras - result.values.reduce(0, +)
-        for id in ranked.prefix(remainder) { result[id, default: 0] += 1 }
+        let correction = total + tax + tip - result.values.reduce(0, +)
+        let ranked = ordered.enumerated().filter { bases[$0.element]! > 0 }.sorted {
+            if fractions[$0.element] != fractions[$1.element] { return fractions[$0.element]! > fractions[$1.element]! }
+            return $0.offset < $1.offset
+        }.map(\.element)
+        if let winner = ranked.first {
+            if result[winner]! + correction >= 0 {
+                result[winner]! += correction
+            } else {
+                // The web drops a negative corrected share for many tiny bases,
+                // losing money. In that case use exact largest-remainder allocation.
+                let extraCents = tax + tip
+                let exactOrder = ordered.enumerated().sorted {
+                    let left = Int64(bases[$0.element]!) * Int64(extraCents) % Int64(total)
+                    let right = Int64(bases[$1.element]!) * Int64(extraCents) % Int64(total)
+                    return left == right ? $0.offset < $1.offset : left > right
+                }.map(\.element)
+                result = bases.mapValues { $0 + Int(Int64($0) * Int64(extraCents) / Int64(total)) }
+                let remainder = total + extraCents - result.values.reduce(0, +)
+                for id in exactOrder.prefix(remainder) { result[id, default: 0] += 1 }
+            }
+        }
         return result.filter { $0.value > 0 }
     }
 

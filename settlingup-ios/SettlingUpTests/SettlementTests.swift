@@ -1,6 +1,7 @@
 import XCTest
 import CoreData
 import UIKit
+import CloudKit
 @testable import SettlingUp
 
 final class SettlementTests: XCTestCase {
@@ -254,6 +255,62 @@ final class PersistenceTests: XCTestCase {
 }
 
 final class WebParityTests: XCTestCase {
+    func testSmartPaymentTiesUseWebsitePersonOrder() {
+        let p = [Person(name: "First creditor"), Person(name: "Second creditor"), Person(name: "Debtor")]
+        let tab = TabSnapshot(name: "Ties", people: p, expenses: [
+            Expense(title: "One", payer: p[0].id, cents: 1000, shares: [p[2].id: 1000], mode: .personal),
+            Expense(title: "Two", payer: p[1].id, cents: 1000, shares: [p[2].id: 1000], mode: .personal)
+        ])
+        XCTAssertEqual(Settlement.displayedPayments(tab), [
+            .init(from: p[2].id, to: p[0].id, cents: 1000),
+            .init(from: p[2].id, to: p[1].id, cents: 1000)
+        ])
+    }
+    func testWebsiteTabCodesAndExistingLinksStayOnWebsite() throws {
+        XCTAssertEqual(try WebsiteTab.url(for: " Ab12Cd ").absoluteString, "https://www.settlingup.app/t/Ab12Cd")
+        for link in ["https://settlingup.app/t/Ab12Cd?p=e", "https://www.settlingup.app/#v2.abc_DEF-123"] {
+            XCTAssertEqual(try WebsiteTab.url(for: link).absoluteString, link)
+        }
+        for invalid in ["", "abc", "a/bcd", "https://settlingup.app.evil.example/t/Ab12Cd", "https://evil.example/t/Ab12Cd", "https://user@settlingup.app/t/Ab12Cd", "javascript:alert(1)"] {
+            XCTAssertThrowsError(try WebsiteTab.url(for: invalid))
+        }
+    }
+    func testCustomRoundingMatchesActualWebsiteCode() throws {
+        // Evaluated by executing index.html's addExpense custom calculation unchanged.
+        let cases: [([Int], Int, Int, [Int])] = [
+            ([1000, 1000, 1000], 2, 0, [1000, 1001, 1001]),
+            ([1, 1, 1, 1], 2, 0, [0, 2, 2, 2]),
+            ([1, 2, 3], 1, 1, [1, 3, 4]),
+            ([1234, 5678, 910], 123, 777, [1376, 6331, 1015]),
+            ([4600, 5800, 5200, 4600, 5400, 5400], 2480, 6200, [5888, 7424, 6656, 5888, 6912, 6912])
+        ]
+        for (values, tax, tip, expected) in cases {
+            let ids = values.map { _ in UUID() }
+            let shares = try Settlement.custom(bases: Dictionary(uniqueKeysWithValues: zip(ids, values)), tax: tax, tip: tip, people: ids)
+            XCTAssertEqual(ids.map { shares[$0, default: 0] }, expected)
+            XCTAssertEqual(shares.values.reduce(0, +), values.reduce(0, +) + tax + tip)
+        }
+    }
+
+    func testTinyCustomSharesNeverLoseMoneyToNegativeRoundingCorrection() throws {
+        let ids = (0..<100).map { _ in UUID() }
+        for count in 2...100 {
+            for extra in 0...100 {
+                let included = Array(ids.prefix(count))
+                let shares = try Settlement.custom(bases: Dictionary(uniqueKeysWithValues: included.map { ($0, 1) }), tax: extra, tip: 0, people: included)
+                XCTAssertEqual(shares.values.reduce(0, +), count + extra)
+                XCTAssertTrue(shares.values.allSatisfy { $0 > 0 })
+            }
+        }
+    }
+
+    func testDecimalPadAmountsAllowOmittedLeadingZeroAndTrailingPoint() throws {
+        let separator = Locale.current.decimalSeparator ?? "."
+        XCTAssertEqual(try Money.parse(separator + "50"), 50)
+        XCTAssertEqual(try Money.parse("12" + separator), 1200)
+        XCTAssertThrowsError(try Money.parse(separator))
+        XCTAssertThrowsError(try Money.parse(separator + "001"))
+    }
     func testOriginalWebsiteDemoBalancesMatchToTheCent() throws {
         // Expected values were evaluated using index.html's computeBalances and
         // computePersonShare against the unmodified settlingup-demos.js scenarios.
@@ -309,6 +366,55 @@ final class WebParityTests: XCTestCase {
 
 @MainActor
 final class ParityPersistenceTests: XCTestCase {
+    func testCustomEditingPreservesTaxTipBasesAndRecordedPaymentsOnDisk() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = TabStore(directory: directory, cloud: false)
+        let id = try store.create(name: "Dinner", names: ["Alex", "Sam", "Jo"])
+        let people = store.tabs[0].people.map(\.id)
+        let bases = Dictionary(uniqueKeysWithValues: zip(people, [1234, 5678, 910]))
+        let original = Expense(title: "Dinner", payer: people[0], cents: 8722,
+                               shares: try Settlement.custom(bases: bases, tax: 123, tip: 777, people: people),
+                               mode: .custom, tax: 123, tip: 777, bases: bases)
+        try store.save(original, tabID: id)
+        try store.record(Settlement.displayedPayments(store.tabs[0])[0], tabID: id)
+        var edited = original
+        edited.title = "Dinner receipt"
+        edited.tip = 877; edited.cents += 100
+        edited.shares = try Settlement.custom(bases: bases, tax: edited.tax, tip: edited.tip, people: people)
+        try store.save(edited, tabID: id, original: original)
+        let expected = store.tabs
+        for persistent in store.container.persistentStoreCoordinator.persistentStores { try store.container.persistentStoreCoordinator.remove(persistent) }
+        let reopened = TabStore(directory: directory, cloud: false)
+        XCTAssertEqual(reopened.tabs, expected)
+        XCTAssertEqual(reopened.tabs[0].expenses[0], edited)
+        XCTAssertEqual(reopened.tabs[0].transfers.count, 1)
+    }
+    func testRemovingZeroSharePersonKeepsExpenseAndLibraryReadable() throws {
+        let store = TabStore(cloud: false, inMemory: true)
+        let id = try store.create(name: "Dinner", names: ["Alex", "Sam", "Jo"])
+        let p = store.tabs[0].people
+        let shares = try Settlement.custom(bases: [p[0].id: 1000, p[1].id: 0], tax: 100, tip: 200, people: p.map(\.id))
+        let expense = Expense(title: "Dinner", payer: p[0].id, cents: 1300, shares: shares, mode: .custom, tax: 100, tip: 200, bases: [p[0].id: 1000, p[1].id: 0])
+        try store.save(expense, tabID: id)
+        try store.removePerson(p[1], tabID: id)
+        XCTAssertTrue(store.dataReadable, store.error ?? "")
+        XCTAssertEqual(store.tabs[0].people.map(\.name), ["Alex", "Jo"])
+        XCTAssertEqual(store.tabs[0].expenses[0].shares, shares)
+        XCTAssertEqual(store.tabs[0].expenses[0].bases, [p[0].id: 1000])
+        try store.tabs[0].validate()
+        XCTAssertNoThrow(try store.exportBackup())
+    }
+
+    func testNestedCloudDiagnosticsExposeServerFailureWithoutRecordKeys() {
+        let inner = NSError(domain: CKErrorDomain, code: CKError.invalidArguments.rawValue, userInfo: [NSLocalizedDescriptionKey: "Cannot create field CD_moveReceipt in production schema"])
+        let partial = NSError(domain: CKErrorDomain, code: CKError.partialFailure.rawValue, userInfo: [CKPartialErrorsByItemIDKey: ["private-record-id": inner]])
+        let multiple = NSError(domain: NSCocoaErrorDomain, code: 134400, userInfo: [NSMultipleUnderlyingErrorsKey: [partial]])
+        let outer = NSError(domain: NSCocoaErrorDomain, code: 134060, userInfo: [NSDetailedErrorsKey: [multiple]])
+        let detail = TabStore.describe(outer)
+        XCTAssertTrue(detail.contains("CD_moveReceipt"))
+        XCTAssertTrue(detail.contains("CKErrorDomain"))
+        XCTAssertFalse(detail.contains("private-record-id"))
+    }
     func testPeopleKeepEntryOrderAndRenameWithoutChangingSplits() throws {
         let store = TabStore(cloud: false, inMemory: true)
         let id = try store.create(name: "Dinner", names: ["Zoe", "Alex", "Sam"])

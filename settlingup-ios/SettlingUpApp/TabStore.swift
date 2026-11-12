@@ -106,16 +106,21 @@ final class TabStore: ObservableObject {
         } catch { cloudAccount = "Could not check iCloud: " + Self.describe(error) }
     }
 
-    private static func describe(_ error: Error, depth: Int = 0) -> String {
+    static func describe(_ error: Error, depth: Int = 0) -> String {
         let value = error as NSError
         var message = "\(value.domain) (\(value.code)): \(value.localizedDescription)"
         if let reason = value.localizedFailureReason, !message.contains(reason) { message += " · " + reason }
         if let recovery = value.localizedRecoverySuggestion { message += " · " + recovery }
-        if depth < 3, let underlying = value.userInfo[NSUnderlyingErrorKey] as? Error {
-            message += " → " + describe(underlying, depth: depth + 1)
-        }
-        if depth < 3, let cloud = error as? CKError, let partial = cloud.partialErrorsByItemID {
-            message += " · " + Set(partial.values.map { describe($0, depth: depth + 1) }).sorted().joined(separator: "; ")
+        if let debug = value.userInfo[NSDebugDescriptionErrorKey] as? String, !message.contains(debug) { message += " · " + debug }
+        if depth < 5 {
+            var children: [Error] = []
+            if let underlying = value.userInfo[NSUnderlyingErrorKey] as? Error { children.append(underlying) }
+            for key in [NSDetailedErrorsKey, NSMultipleUnderlyingErrorsKey] {
+                if let errors = value.userInfo[key] as? [Error] { children += errors }
+            }
+            if let partial = value.userInfo[CKPartialErrorsByItemIDKey] as? [AnyHashable: Error] { children += partial.values }
+            let descriptions = Set(children.prefix(30).map { describe($0, depth: depth + 1) }).sorted()
+            if !descriptions.isEmpty { message += " → " + descriptions.joined(separator: "; ") }
         }
         return message
     }
@@ -152,9 +157,10 @@ final class TabStore: ObservableObject {
                     guard let self else { return }
                     let phase: String
                     switch event.type { case .setup: phase = "Setup"; case .import: phase = "Download"; case .export: phase = "Upload"; @unknown default: phase = "Sync" }
-                    let scope = self.sharedStore?.identifier == event.storeIdentifier ? "Shared" : "Private"
+                    let eventStore = self.container.persistentStoreCoordinator.persistentStores.first { $0.identifier == event.storeIdentifier }
+                    let scope = eventStore?.url?.lastPathComponent == "Shared.sqlite" ? "Shared" : "Private"
                     let outcome = event.endDate == nil ? "started" : event.succeeded ? "completed" : "failed"
-                    var detail = "\(event.startDate.formatted(date: .abbreviated, time: .standard)) · \(scope) \(phase): \(outcome)"
+                    var detail = "\(event.startDate.formatted(date: .abbreviated, time: .standard)) · \(scope) \(phase): \(outcome) · event \(event.identifier) · store \(event.storeIdentifier)"
                     if let failure = event.error { detail += " · " + Self.describe(failure) }
                     self.syncDetails = Array(([detail] + self.syncDetails).prefix(30))
                     #if DEBUG
@@ -313,6 +319,14 @@ final class TabStore: ObservableObject {
         }
         let expenseIDs = Set(snapshot.expenses.filter { $0.payer == person.id || $0.shares[person.id] != nil }.map(\.id))
         let transferIDs = Set(snapshot.transfers.filter { $0.from == person.id || $0.to == person.id }.map(\.id))
+        // Older editors retained zero bases for people who owed nothing. Removing
+        // those people must not leave an invalid reference in an otherwise valid expense.
+        for var expense in snapshot.expenses where !expenseIDs.contains(expense.id) && expense.bases[person.id] != nil {
+            expense.bases.removeValue(forKey: person.id)
+            if let entry = tab.entries?.first(where: { $0.kind == "expense" && $0.id == expense.id }) {
+                entry.payload = try JSONEncoder().encode(expense)
+            }
+        }
         for entry in tab.entries ?? [] {
             if (entry.kind == "person" && entry.id == person.id) || (entry.kind == "expense" && entry.id.map(expenseIDs.contains) == true) || (entry.kind == "transfer" && entry.id.map(transferIDs.contains) == true) {
                 context.delete(entry)
@@ -390,7 +404,7 @@ final class TabStore: ObservableObject {
     func persist(_ share: CKShare, store: NSPersistentStore) {
         container.persistUpdatedShare(share, in: store) { [weak self] _, error in
             Task { @MainActor in
-                if let error { self?.error = "Could not update sharing permissions: \(error.localizedDescription)" }
+                if let error { self?.error = "Could not update sharing permissions: \(Self.describe(error))" }
                 self?.reload()
             }
         }
@@ -401,7 +415,7 @@ final class TabStore: ObservableObject {
         guard ready, let sharedStore else { error = "iCloud sharing is not ready. Reopen the invitation after configuring iCloud."; return }
         container.acceptShareInvitations(from: [metadata], into: sharedStore) { [weak self] _, error in
             Task { @MainActor in
-                if let error { self?.error = "Could not join this tab: \(error.localizedDescription)" }
+                if let error { self?.error = "Could not join this tab: \(Self.describe(error))" }
                 else { self?.status = "Invitation accepted · Waiting for iCloud to download the tab"; self?.reload() }
             }
         }

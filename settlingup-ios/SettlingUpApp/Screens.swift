@@ -3,12 +3,15 @@ import UniformTypeIdentifiers
 
 struct LibraryView: View {
     @EnvironmentObject private var store: TabStore
+    @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @State private var selected: UUID?
     @State private var tabName = ""
     @State private var creating = false
     @State private var settings = false
     @State private var error: String?
+    @State private var websiteCode = ""
+    @State private var websiteError: String?
     var body: some View {
         NavigationStack {
             Group {
@@ -39,6 +42,17 @@ struct LibraryView: View {
                                 ForEach(store.tabs) { tab in
                                     TabCard(tab: tab) { selected = tab.id }.webCard()
                                 }
+                            }
+                            DisclosureGroup("Find a website tab") {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text("Website tabs stay on the website. Open your existing code or link to keep using it there.").font(Brand.ui(.subheadline)).foregroundStyle(.secondary)
+                                    TextField("Tab code or link", text: $websiteCode).textInputAutocapitalization(.never).autocorrectionDisabled().webInput()
+                                    Button("Open website tab") {
+                                        do { let url = try WebsiteTab.url(for: websiteCode); websiteError = nil; openURL(url) }
+                                        catch { websiteError = error.localizedDescription }
+                                    }.buttonStyle(WebButton(primary: false))
+                                    if let websiteError { Text(websiteError).foregroundStyle(.red).font(Brand.ui(.subheadline)) }
+                                }.padding(.top, 10)
                             }
                             DisclosureGroup("Try a demo") {
                                 VStack(spacing: 10) {
@@ -71,13 +85,19 @@ struct LibraryView: View {
         .safeAreaInset(edge: .bottom) {
             if let error = store.error {
                 HStack(alignment: .top) {
-                    Text(error).font(Brand.ui(.caption))
+                    Text(error).font(Brand.ui(.caption)).lineLimit(4)
                     Spacer()
                     Button("Dismiss", systemImage: "xmark") { store.error = nil }.labelStyle(.iconOnly).frame(width: 44, height: 44)
                 }.padding().background(Brand.background).overlay(alignment: .top) { Divider() }
             }
         }
         .onChange(of: scenePhase) { _, phase in if phase == .active { store.refresh() } }
+        #if DEBUG
+        .onAppear {
+            let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains("--sample-data"), arguments.contains("--preview-tab") { selected = store.tabs.first?.id }
+        }
+        #endif
     }
 }
 
@@ -186,7 +206,13 @@ struct TabDetailView: View {
                 }.padding(16).frame(maxWidth: 480).frame(maxWidth: .infinity)
             }.background(Brand.background)
                 .onChange(of: step) { _, _ in proxy.scrollTo("top", anchor: .top) }
-        }.onAppear { identity = UserDefaults.standard.string(forKey: "identity-\(tab.id)") ?? "" }
+        }.onAppear {
+            identity = UserDefaults.standard.string(forKey: "identity-\(tab.id)") ?? ""
+            #if DEBUG
+            let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains("--sample-data"), arguments.contains("--preview-settle") { step = 3 }
+            #endif
+        }
         .sheet(item: $editing) { ExpenseEditor(tab: current, original: $0).environmentObject(store) }
         .sheet(item: $shared) { CloudSharingView(shared: $0, store: store) }
         .sheet(isPresented: $pickingIdentity) { identityPicker }
